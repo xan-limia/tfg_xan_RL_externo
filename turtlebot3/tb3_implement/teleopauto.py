@@ -34,7 +34,9 @@ class AutonomousNode:
 
     def image_callback(self, data):
         self.image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        cv2.imshow("window", self.image)
+        img_resized = cv2.resize(self.image, (0, 0), fx=4, fy=4)
+        cv2.imshow("window", img_resized)
+        # cv2.imshow("window", self.image)
 
     def find_closest_velocity(self):
         if len(self.stored_images) == 0:
@@ -60,6 +62,9 @@ class AutonomousNode:
                 self.velocity_publisher.publish(twist)
             if key == ord('q'):
                 break
+            if key == ord('r'):
+                cv2.destroyWindow('window')
+                cv2.namedWindow("window", 1)
 
 
 if __name__ == '__main__':
