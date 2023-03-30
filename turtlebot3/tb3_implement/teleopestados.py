@@ -26,6 +26,8 @@ WAFFLE_MAX_ANG_VEL = 1.82
 LIN_VEL_STEP_SIZE = 0.01
 ANG_VEL_STEP_SIZE = 0.1
 
+TH_DIST_IMAGE = 650000
+
 
 class TeleoperationNode:
     def __init__(self, filebagname):
@@ -112,19 +114,20 @@ class TeleoperationNode:
                 self.stored_velocities.append(msg)
 
     def find_closest_velocity(self):
+        print("estados", len(self.stored_images))
         if len(self.stored_images) == 0:
             return None
         min_dist = float('inf')
         min_idx = -1
         for i, img in enumerate(self.stored_images):
-            if self.image is None:
-                pass
-            else:
-                distance = numpy.sum((cv2.absdiff(self.image.flatten(), img.flatten()) ** 2))
-                if distance < min_dist:
-                    min_dist = distance
-                    min_idx = i
-        if min_dist > 6000:
+            distance = numpy.sum((cv2.absdiff(self.image.flatten(), img.flatten()) ** 2))
+            print(distance, i)
+            if distance < min_dist:
+                min_dist = distance
+                min_idx = i
+
+        print(len(self.stored_images), min_idx, min_dist, self.stored_velocities[min_idx].linear.x, self.stored_velocities[min_idx].angular.z)
+        if min_dist > TH_DIST_IMAGE:
             return None
         else:
             return self.stored_velocities[min_idx]
@@ -134,68 +137,71 @@ class TeleoperationNode:
         self.load_rosbag()
         while not rospy.is_shutdown():
             #cv2.waitKey(0)
-            twist = self.find_closest_velocity()
-            if twist is not None:
-                print("Se ha encontrado coincidiencia, adoptando velocidad correspondiente\n")
-                self.velocity_publisher.publish(twist)
-            else:
-                print("No hay coincidencias, denetiendo robot\n")
-                twist = Twist()
-                twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
-                twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
-                node.velocity_publisher.publish(twist)
-                key = input(msg)
-                if key.lower() == 'w':
-                    self.target_linear_vel = 0.02
-                    self.target_angular_vel = 0.0
-                    self.write = True
-                    print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                elif key.lower() == 's':
-                    self.target_linear_vel = -0.02
-                    self.write = True
-                    print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                elif key.lower() == 'a':
-                    self.target_angular_vel = 0.02
-                    self.target_linear_vel = 0.02
-                    self.write = True
-                    print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                elif key.lower() == 'd':
-                    self.target_angular_vel = 0.02
-                    self.target_angular_vel = -0.02
-                    self.write = True
-                    print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                if key == ord('q'):
-                    break
+            if self.image is not None:
+                twist = self.find_closest_velocity()
+            
+                if twist is not None:
+                    print("Se ha encontrado coincidiencia, adoptando velocidad correspondiente\n")
+                    self.velocity_publisher.publish(twist)
+                else:
+                    print("No hay coincidencias, denetiendo robot\n")
+                    twist = Twist()
+                    twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
+                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
+                    node.velocity_publisher.publish(twist)
+                    key = input(msg)
+                    if key.lower() == 'w':
+                        self.target_linear_vel = 0.05
+                        self.target_angular_vel = 0.0
+                        self.write = True
+                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
+                    elif key.lower() == 's':
+                        self.target_linear_vel = -0.025
+                        self.write = True
+                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
+                    elif key.lower() == 'a':
+                        self.target_angular_vel = 0.18
+                        self.target_linear_vel = 0.05
+                        self.write = True
+                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
+                    elif key.lower() == 'd':
+                        self.target_angular_vel = -0.18
+                        self.target_linear_vel = 0.05
+                        self.write = True
+                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
+                    if key.lower() == 'q':
+                        break
 
-                twist = Twist()
+                    twist = Twist()
 
-                self.control_linear_vel = self.makeSimpleProfile(self.control_linear_vel, self.target_linear_vel, (LIN_VEL_STEP_SIZE/2.0))
-                twist.linear.x = self.control_linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+                    # self.control_linear_vel = self.makeSimpleProfile(self.control_linear_vel, self.target_linear_vel, (LIN_VEL_STEP_SIZE/2.0))
+                    twist.linear.x = self.target_linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-                self.control_angular_vel = self.makeSimpleProfile(self.control_angular_vel, self.target_angular_vel, (ANG_VEL_STEP_SIZE/2.0))
-                twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.control_angular_vel
+                    # self.control_angular_vel = self.makeSimpleProfile(self.control_angular_vel, self.target_angular_vel, (ANG_VEL_STEP_SIZE/2.0))
+                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.target_angular_vel
 
-                self.velocities.append(twist)
-                self.velocity_publisher.publish(twist)
+                    self.velocities.append(twist)
+                    self.velocity_publisher.publish(twist)
 
-                if self.write:
-                    current_time = rospy.Time.now()
-                    if len(self.velocities) > 0 and self.image is not None:
-                        now = datetime.datetime.now()
-                        print(now)
-                        if not os.path.exists(self.folder):
-                            os.makedirs(self.folder)
-                        filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jpg"
-                        filepath = os.path.join(os.getcwd(), filename)
-                        cv2.imwrite(filepath, self.image)
-                        self.stored_images.append(self.image)
-                        self.stored_velocities.append(self.velocities[-1])
-                        self.bag.write('/image', self.img_msg, current_time)
-                        self.bag.write('/velocities', self.velocities[-1], current_time)
-                    self.img_msg = None
-                    self.image = None
-                    self.velocities = []
-                    self.write = False
+                    if self.write:
+                        current_time = rospy.Time.now()
+                        if len(self.velocities) > 0 and self.image is not None:
+                            now = datetime.datetime.now()
+                            print(now)
+                            if not os.path.exists(self.folder):
+                                os.makedirs(self.folder)
+                            filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
+                            filepath = os.path.join(os.getcwd(), filename)
+                            cv2.imwrite(filepath, self.image)
+                            self.stored_images.append(self.image)
+                            self.stored_velocities.append(self.velocities[-1])
+                            print("salvados", len(self.stored_images))
+                            self.bag.write('/image', self.img_msg, current_time)
+                            self.bag.write('/velocities', self.velocities[-1], current_time)
+                        self.img_msg = None
+                        self.image = None
+                        self.velocities = []
+                        self.write = False
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
