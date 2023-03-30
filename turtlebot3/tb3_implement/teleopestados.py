@@ -124,7 +124,7 @@ class TeleoperationNode:
                 if distance < min_dist:
                     min_dist = distance
                     min_idx = i
-        if min_dist > 100000:
+        if min_dist > 6000:
             return None
         else:
             return self.stored_velocities[min_idx]
