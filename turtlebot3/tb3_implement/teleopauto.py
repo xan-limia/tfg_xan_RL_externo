@@ -51,6 +51,7 @@ class AutonomousNode:
                 if distance < min_dist:
                     min_dist = distance
                     min_idx = i
+        print(min_idx, min_dist, self.stored_velocities[min_idx].linear.x, self.stored_velocities[min_idx].angular.z)
         return self.stored_velocities[min_idx]
 
     def teleop(self):
