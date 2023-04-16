@@ -1,7 +1,7 @@
 import rospy
 import rosbag
 import cv2, numpy, pyexiv2
-import os, sys
+import os, sys, signal
 import datetime
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -14,7 +14,7 @@ Introduce la direccion
    a         d
         s
 
-q to quit
+Ctrl+C to quit
 """
 
 TH_DIST_IMAGE = 650000
@@ -161,8 +161,6 @@ class TeleoperationNode:
                         self.target_linear_vel = 0.05
                         self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    if key.lower() == 'q':
-                        break
 
                     twist = Twist()
 
@@ -185,6 +183,18 @@ if __name__ == '__main__':
     foldername = sys.argv[1]
 
     node = TeleoperationNode(foldername)
+
+    def signal_handler(sig, frame):
+        #print("Programa detenido")
+        twist = Twist()
+        twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
+        node.velocity_publisher.publish(twist)
+        exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTSTP, signal_handler)
+
     node.teleop()
 
     node.stop_robot()
