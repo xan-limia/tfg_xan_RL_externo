@@ -102,27 +102,26 @@ class TeleoperationNode:
         node.velocity_publisher.publish(twist)
 
     def write_images(self):
-        if self.write:
-            if len(self.velocities) > 0 and self.image is not None:
-                now = datetime.datetime.now()
-                print(now)
-                filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
-                filepath = os.path.join(os.getcwd(), filename)
-                cv2.imwrite(filepath, self.image)
-                # Leer imagen
-                img_data = pyexiv2.Image(filepath)
-                metadata = img_data.read_exif()
-                # Agregar metadato
-                metadata['Exif.Photo.UserComment'] = f"linear={self.target_linear_vel}\nangular={self.target_angular_vel}"
-                img_data.modify_exif(metadata)
-                self.stored_images.append(self.image)
-                self.stored_velocities.append((self.target_linear_vel, self.target_angular_vel))
-                print("salvados", len(self.stored_images))
-            self.img_msg = None
-            self.image = None
-            self.velocities = []
-            self.write = False
-        
+        if len(self.velocities) > 0 and self.image is not None:
+            now = datetime.datetime.now()
+            print(now)
+            filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
+            filepath = os.path.join(os.getcwd(), filename)
+            cv2.imwrite(filepath, self.image)
+            # Leer imagen
+            img_data = pyexiv2.Image(filepath)
+            metadata = img_data.read_exif()
+            # Agregar metadato
+            metadata['Exif.Photo.UserComment'] = f"linear={self.target_linear_vel}\nangular={self.target_angular_vel}"
+            img_data.modify_exif(metadata)
+            self.stored_images.append(self.image)
+            self.stored_velocities.append((self.target_linear_vel, self.target_angular_vel))
+            print("salvados", len(self.stored_images))
+        self.img_msg = None
+        self.image = None
+        self.velocities = []
+        self.write = False
+    
     def teleop(self):
         self.load_images()
         while not rospy.is_shutdown():
@@ -173,6 +172,9 @@ class TeleoperationNode:
 
                     self.velocities.append(twist)
                     self.velocity_publisher.publish(twist)
+
+                    if self.write:
+                        self.write_images()
 
                     
 
