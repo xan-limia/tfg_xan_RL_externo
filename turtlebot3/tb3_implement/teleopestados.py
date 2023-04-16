@@ -1,6 +1,6 @@
 import rospy
 import rosbag
-import cv2, numpy
+import cv2, numpy, pyexiv2
 import os, sys
 import datetime
 from sensor_msgs.msg import Image
@@ -17,20 +17,11 @@ Introduce la direccion
 q to quit
 """
 
-BURGER_MAX_LIN_VEL = 0.22
-BURGER_MAX_ANG_VEL = 2.84
-
-WAFFLE_MAX_LIN_VEL = 0.26
-WAFFLE_MAX_ANG_VEL = 1.82
-
-LIN_VEL_STEP_SIZE = 0.01
-ANG_VEL_STEP_SIZE = 0.1
-
 TH_DIST_IMAGE = 650000
 
 
 class TeleoperationNode:
-    def __init__(self, filebagname):
+    def __init__(self, foldername):
         rospy.init_node('teleoperation')
         self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         self.image_subscriber = rospy.Subscriber('/camera/image', Image, self.image_callback)
@@ -42,14 +33,12 @@ class TeleoperationNode:
         self.velocities = []
         self.image = None
         self.img_msg = None
-        self.bag_filename = os.path.join(os.getcwd(), filebagname)
-        self.bag = None
         self.write = False
 
         self.stored_images = []
         self.stored_velocities = []
 
-        self.folder = filebagname.replace(".bag", "")
+        self.folder = foldername
 
         self.target_linear_vel   = 0.0
         self.target_angular_vel  = 0.0
@@ -59,59 +48,31 @@ class TeleoperationNode:
     def vels(self, target_linear_vel, target_angular_vel):
         return "currently:\tlinear vel %s\t angular vel %s " % (target_linear_vel,target_angular_vel)
     
-    def makeSimpleProfile(self, output, input, slop):
-        if input > output:
-            output = min( input, output + slop )
-        elif input < output:
-            output = max( input, output - slop )
-        else:
-            output = input
-
-        return output
-
-    def constrain(self, input, low, high):
-        if input < low:
-            input = low
-        elif input > high:
-            input = high
-        else:
-            input = input
-
-        return input
-
-    def checkLinearLimitVelocity(self, vel):
-        if self.turtlebot3_model == "burger":
-            vel = self.constrain(vel, -BURGER_MAX_LIN_VEL, BURGER_MAX_LIN_VEL)
-        elif self.turtlebot3_model == "waffle" or self.turtlebot3_model == "waffle_pi":
-            vel = self.constrain(vel, -WAFFLE_MAX_LIN_VEL, WAFFLE_MAX_LIN_VEL)
-        else:
-            vel = self.constrain(vel, -BURGER_MAX_LIN_VEL, BURGER_MAX_LIN_VEL)
-
-        return vel
-    
-    def checkAngularLimitVelocity(self, vel):
-        if self.turtlebot3_model == "burger":
-            vel = self.constrain(vel, -BURGER_MAX_ANG_VEL, BURGER_MAX_ANG_VEL)
-        elif self.turtlebot3_model == "waffle" or self.turtlebot3_model == "waffle_pi":
-            vel = self.constrain(vel, -WAFFLE_MAX_ANG_VEL, WAFFLE_MAX_ANG_VEL)
-        else:
-            vel = self.constrain(vel, -BURGER_MAX_ANG_VEL, BURGER_MAX_ANG_VEL)
-
-        return vel
 
     def image_callback(self, data):
         self.img_msg = data
         self.image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         # img_resized = cv2.resize(self.image, (0, 0), fx=4, fy=4)
         # cv2.imshow("window", img_resized)
-        
-    def load_rosbag(self):
-        for topic, msg, t in self.bag.read_messages(topics=['/image', '/velocities']):
-            if topic == '/image':
-                imagecv2 = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-                self.stored_images.append(imagecv2)
-            else:
-                self.stored_velocities.append(msg)
+    
+    def load_images(self):
+        if not os.path.exists(self.folder):
+            os.makedirs(self.folder)
+            return
+        for filename in os.listdir(self.folder):
+            if(filename.endswith('.png')):
+                img = cv2.imread(os.path.join(self.folder, filename))
+                self.stored_images.append(img)
+
+            img = pyexiv2.Image(os.path.join(self.folder, filename))
+            metadata = img.read_exif()
+            text = metadata['Exif.Photo.UserComment']               
+            linear_vel = float(text.split("=")[1].split("\n")[0])
+            angular_vel = float(text.split("=")[2])
+            self.stored_velocities.append((linear_vel, angular_vel))
+
+
+
 
     def find_closest_velocity(self):
         print("estados", len(self.stored_images))
@@ -126,22 +87,27 @@ class TeleoperationNode:
                 min_dist = distance
                 min_idx = i
 
-        print(len(self.stored_images), min_idx, min_dist, self.stored_velocities[min_idx].linear.x, self.stored_velocities[min_idx].angular.z)
+        #print(len(self.stored_images), min_idx, min_dist, self.stored_velocities[min_idx].linear.x, self.stored_velocities[min_idx].angular.z)
         if min_dist > TH_DIST_IMAGE:
             return None
         else:
             return self.stored_velocities[min_idx]
         
     def teleop(self):
-        self.bag = rosbag.Bag(self.bag_filename, 'w')
-        self.load_rosbag()
+        self.load_images()
         while not rospy.is_shutdown():
             #cv2.waitKey(0)
             if self.image is not None:
-                twist = self.find_closest_velocity()
+                closest_velocity = self.find_closest_velocity()
             
-                if twist is not None:
+                if closest_velocity is not None:
                     print("Se ha encontrado coincidiencia, adoptando velocidad correspondiente\n")
+                    twist = Twist()
+
+                    twist.linear.x = closest_velocity[0]; twist.linear.y = 0.0; twist.linear.z = 0.0
+
+                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = closest_velocity[1]
+
                     self.velocity_publisher.publish(twist)
                 else:
                     print("No hay coincidencias, denetiendo robot\n")
@@ -174,30 +140,29 @@ class TeleoperationNode:
 
                     twist = Twist()
 
-                    # self.control_linear_vel = self.makeSimpleProfile(self.control_linear_vel, self.target_linear_vel, (LIN_VEL_STEP_SIZE/2.0))
                     twist.linear.x = self.target_linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-                    # self.control_angular_vel = self.makeSimpleProfile(self.control_angular_vel, self.target_angular_vel, (ANG_VEL_STEP_SIZE/2.0))
                     twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.target_angular_vel
 
                     self.velocities.append(twist)
                     self.velocity_publisher.publish(twist)
 
                     if self.write:
-                        current_time = rospy.Time.now()
                         if len(self.velocities) > 0 and self.image is not None:
                             now = datetime.datetime.now()
                             print(now)
-                            if not os.path.exists(self.folder):
-                                os.makedirs(self.folder)
                             filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
                             filepath = os.path.join(os.getcwd(), filename)
                             cv2.imwrite(filepath, self.image)
+                            # Leer imagen
+                            img_data = pyexiv2.Image(filepath)
+                            metadata = img_data.read_exif()
+                            # Agregar metadato
+                            metadata['Exif.Photo.UserComment'] = f"linear={self.target_linear_vel}\nangular={self.target_angular_vel}"
+                            img_data.modify_exif(metadata)
                             self.stored_images.append(self.image)
-                            self.stored_velocities.append(self.velocities[-1])
+                            self.stored_velocities.append((self.target_linear_vel, self.target_angular_vel))
                             print("salvados", len(self.stored_images))
-                            self.bag.write('/image', self.img_msg, current_time)
-                            self.bag.write('/velocities', self.velocities[-1], current_time)
                         self.img_msg = None
                         self.image = None
                         self.velocities = []
@@ -205,16 +170,16 @@ class TeleoperationNode:
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print("Debe ingresar el nombre del archivo bag")
+        print("Debe ingresar el nombre de la carpeta a utilizar")
         sys.exit()
-    filebagname = sys.argv[1]
+    foldername = sys.argv[1]
 
-    node = TeleoperationNode(filebagname)
+    node = TeleoperationNode(foldername)
     node.teleop()
 
     twist = Twist()
     twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
     twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
     node.velocity_publisher.publish(twist)
-    node.bag.close()
+    
     
