@@ -57,35 +57,5 @@ if __name__ == '__main__':
                 # print("Se va a eliminar la imagen")
                 # os.remove(os.path.join(folder, file))
              
-            
 
-
-# # Carga la imagen
-# img = cv2.imread("prueba3/image_2023-03-30_10-37-07.png")
-# print(img.shape)
-
-# # Define la región que deseas resaltar
-# x = int(img.shape[1]/2) - 5 # coordenada x
-# y = int(img.shape[0]-15) # coordenada y
-# w = 10 # ancho del rectángulo
-# h = 7 # altura del rectángulo
-# threshold = 0.8
-
-# # Dibuja el rectángulo rojo en la imagen
-# cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 1)
-
-# # Muestra la imagen con el rectángulo rojo
-# cv2.imshow("Imagen con rectángulo rojo", img)
-
-# img_gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-# # Muestra la imagen en escala de grises
-# cv2.imshow('Imagen en escala de grises', img_gris)
-
-# umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
-
-# # Muestra la imagen binarizada
-# cv2.imshow('Imagen binarizada', img_binaria)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
 
