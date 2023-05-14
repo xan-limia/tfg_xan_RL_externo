@@ -34,16 +34,17 @@ if __name__ == '__main__':
             # Define la región que deseas resaltar
             x = int(img.shape[1]/2) - 5 # coordenada x
             y = int(img.shape[0]-15) # coordenada y
+            print(x, y)
             w = W # ancho del rectángulo
             h = H # altura del rectángulo
             threshold = THRESHOLD
 
-            # cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 1)
+            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 1)
 
-            # # Muestra la imagen con el rectángulo rojo
-            # cv2.imshow("Imagen con rectángulo rojo", img)
-            # cv2.waitKey(0)
-            # cv2.destroyAllWindows()
+            # Muestra la imagen con el rectángulo rojo
+            cv2.imshow("Imagen con rectángulo rojo", img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
             img_gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
@@ -53,7 +54,7 @@ if __name__ == '__main__':
             print(result, i)
 
             if(result == False):
-                print(f"La imagen {file} no tiene refuerzo")
+                print(f"La imagen {file} tiene refuerzo")
                 # print("Se va a eliminar la imagen")
                 # os.remove(os.path.join(folder, file))
              
