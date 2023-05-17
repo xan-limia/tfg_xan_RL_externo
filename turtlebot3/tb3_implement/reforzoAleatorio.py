@@ -3,6 +3,7 @@ import rosbag
 import cv2, numpy, pyexiv2
 import os, sys, signal
 import datetime
+import random
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Pose, Quaternion
@@ -177,11 +178,12 @@ class TeleoperationNode:
             # Agregar metadato
             metadata['Exif.Photo.UserComment'] = f"linear={self.stored_velocities[i][0]}\nangular={self.stored_velocities[i][1]}"
             img_data.modify_exif(metadata)
+            
     
     def teleop(self):
         self.load_images()
         while not rospy.is_shutdown():
-            #cv2.waitKey(0)
+
             if self.image is not None:
 
                 result = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
@@ -209,28 +211,29 @@ class TeleoperationNode:
                 else:
                     self.stop_robot()
 
-                    key = input(msg)
-                    if key.lower() == '1':
+                    random_action = random.randint(1, 5)
+
+                    if random_action == 1:
                         self.target_linear_vel = 0.05
                         self.target_angular_vel = 0.0
                         self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif key.lower() == '2':
+                    elif random_action == 2:
                         self.target_angular_vel = 0.18
                         self.target_linear_vel = 0.05
                         self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif key.lower() == '3':
+                    elif random_action == 3:
                         self.target_angular_vel = 0.30
                         self.target_linear_vel = 0.05
                         self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif key.lower() == '4':
+                    elif random_action == 4:
                         self.target_angular_vel = -0.18
                         self.target_linear_vel = 0.05
                         self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif key.lower() == '5':
+                    elif random_action == 5:
                         self.target_angular_vel = -0.30
                         self.target_linear_vel = 0.05
                         self.write = True
@@ -266,6 +269,7 @@ if __name__ == '__main__':
         twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
         node.velocity_publisher.publish(twist)
+       
         exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
