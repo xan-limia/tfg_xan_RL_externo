@@ -44,7 +44,6 @@ class TeleoperationNode:
         self.bridge = CvBridge()
         cv2.namedWindow("window", 1) 
 
-        self.velocities = []
         self.image = None
         self.img_msg = None
         self.write = False
@@ -142,7 +141,7 @@ class TeleoperationNode:
         if min_dist > TH_DIST_IMAGE:
             return None
         else:
-            self.penultimate_index_action = self.last_index_action
+            # self.penultimate_index_action = self.last_index_action
             self.last_index_action = min_idx
             return self.stored_velocities[min_idx]
         
@@ -162,15 +161,14 @@ class TeleoperationNode:
         node.velocity_publisher.publish(twist)
 
     def append_states(self):
-        if len(self.velocities) > 0 and self.image is not None:
+        if self.image is not None:
             self.stored_images.append(self.image)
             self.stored_velocities.append((self.target_linear_vel, self.target_angular_vel))
-            self.penultimate_index_action = self.last_index_action
+            # self.penultimate_index_action = self.last_index_action
             self.last_index_action = len(self.stored_images) - 1
             print("salvados", len(self.stored_images))
         self.img_msg = None
         self.image = None
-        self.velocities = []
         self.write = False
         self.number_states = len(self.stored_images)
 
@@ -284,7 +282,6 @@ class TeleoperationNode:
 
                     twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.target_angular_vel
 
-                    self.velocities.append(twist)
                     self.velocity_publisher.publish(twist)
 
 
