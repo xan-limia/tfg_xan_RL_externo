@@ -24,8 +24,8 @@ Ctrl+C to quit
 
 TH_DIST_IMAGE = 650000
 TH_R_IMAGE = 0.8
-W = 10
-H = 7
+W = 8
+H = 6
 X = 35
 Y = 45
 
@@ -46,7 +46,6 @@ class TeleoperationNode:
 
         self.image = None
         self.img_msg = None
-        self.write = False
         self.robot_position = None
 
         self.stored_images = []
@@ -253,27 +252,22 @@ class TeleoperationNode:
                     if random_action == 1:
                         self.target_linear_vel = 0.15
                         self.target_angular_vel = 0.0
-                        self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
                     elif random_action == 2:
                         self.target_angular_vel = 0.54
                         self.target_linear_vel = 0.15
-                        self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
                     elif random_action == 3:
                         self.target_angular_vel = 0.90
                         self.target_linear_vel = 0.15
-                        self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
                     elif random_action == 4:
                         self.target_angular_vel = -0.54
                         self.target_linear_vel = 0.15
-                        self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
                     elif random_action == 5:
                         self.target_angular_vel = -0.90
                         self.target_linear_vel = 0.15
-                        self.write = True
                         print(self.vels(self.target_linear_vel,self.target_angular_vel))
 
                     twist = Twist()
@@ -284,9 +278,7 @@ class TeleoperationNode:
 
                     self.velocity_publisher.publish(twist)
 
-
-                    if self.write:
-                        self.append_states()
+                    self.append_states()
 
                     
 
