@@ -3,8 +3,8 @@ import numpy as np
 import os, sys
 
 THRESHOLD = 0.8
-W = 10
-H = 7
+W = 8
+H = 6
 
 def check_ref_in_images(img, x, y, w, h, threshold):
     region = img[y:y+h, x:x+w]
