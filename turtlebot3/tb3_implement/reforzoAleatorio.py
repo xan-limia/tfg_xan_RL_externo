@@ -54,6 +54,11 @@ class TeleoperationNode:
 
         self.folder = foldername
 
+        now = datetime.datetime.now()
+        bag_name = f"{self.folder}/{self.folder}_{now.strftime('%Y-%m-%d_%H-%M-%S-%f')}.bag"
+        self.bag_file = os.path.join(os.getcwd(), bag_name)
+        self.bag = None
+
         self.target_linear_vel   = 0.0
         self.target_angular_vel  = 0.0
         self.control_linear_vel  = 0.0
@@ -67,7 +72,7 @@ class TeleoperationNode:
         self.img_msg = data
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
         self.image = self.mask_images(image_bridge)
-        # self.image = image_bridge
+        # self.image = image_bridge ## Descomentar para executar sen mascara
 
     def mask_images(self, img):
         h, w = img.shape[:2]
@@ -163,7 +168,10 @@ class TeleoperationNode:
 
         for archivo in os.listdir(self.folder):
             ruta_archivo = os.path.join(self.folder, archivo)
-            os.remove(ruta_archivo)
+            if ruta_archivo.endswith(".bag"):
+                pass
+            else:
+                os.remove(ruta_archivo)
 
         
         for i, img in enumerate(self.stored_images):
@@ -182,6 +190,7 @@ class TeleoperationNode:
     
     def teleop(self):
         self.load_images()
+        self.bag = rosbag.Bag(self.bag_file, 'w')
         while not rospy.is_shutdown():
 
             if self.image is not None:
@@ -265,11 +274,14 @@ if __name__ == '__main__':
     def signal_handler(sig, frame):
         #print("Programa detenido")
         node.write_images()
+
         twist = Twist()
         twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
         node.velocity_publisher.publish(twist)
-       
+
+        node.bag.close()
+
         exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
