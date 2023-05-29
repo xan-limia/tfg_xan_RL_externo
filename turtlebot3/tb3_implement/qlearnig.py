@@ -29,7 +29,7 @@ H = 6
 X = 35
 Y = 45
 
-EPSILON = 0.4
+EPSILON = 0.1
 ACTIONS = 5
 
 LEARNING_RATE = 0.1
@@ -158,7 +158,8 @@ class TeleoperationNode:
     def append_states(self):
         if self.image is not None:
             self.stored_images.append(self.image)
-            self.q_values.append([0, 0, 0, 0, 0])
+            init_q_values = [random.uniform(0, 0.1) for _ in range(5)] # inicializar de forma aleatoria 0 e 0.1
+            self.q_values.append(init_q_values) 
             self.last_index_action = len(self.stored_images) - 1
             print("salvados", len(self.stored_images))
         # self.img_msg = None
@@ -171,7 +172,7 @@ class TeleoperationNode:
 
         q_values = self.q_values[self.current_state]
         if numpy.random.random() < EPSILON:
-            action = numpy.random.randint(5)
+            action = numpy.random.randint(5)  # Explorar mais ao principio
         else:
             action = numpy.argmax(q_values)
         return action
@@ -206,7 +207,7 @@ class TeleoperationNode:
 
         new_q_values = self.q_values[new_state]
         print(self.q_values[new_state], new_q_values)
-        max_q_value = numpy.argmax(new_q_values)
+        max_q_value = numpy.amax(new_q_values, axis=None)
 
         new_q_value = current_q_value + LEARNING_RATE * (reward + DISCOUNT_FACTOR * max_q_value - current_q_value)
         self.q_values[self.current_state][self.last_action] = new_q_value
@@ -265,7 +266,7 @@ class TeleoperationNode:
             current_time = rospy.Time.now()
             if self.image is not None:
 
-                self.current_state = self.find_closest_velocity()
+                self.current_state = self.find_closest_state()
             
                 if self.current_state is not None:
                     # message = String()
@@ -274,7 +275,7 @@ class TeleoperationNode:
                     # self.bag.write(topic, message, current_time)
                     # self.bag.write('/position', self.robot_position, current_time)
 
-                    print("Se ha encontrado coincidiencia, el estado existe\n")
+                    #print("Se ha encontrado coincidiencia, el estado existe\n")
                     
                     action = self.select_action()
 
@@ -286,12 +287,13 @@ class TeleoperationNode:
 
                     new_state = self.find_closest_state()
                     print(new_state)
-                    if new_state is None:
-                        self.stop_robot()
+                    if new_state is None: # estado novo
+                        self.stop_robot() # eliminar no real
                         self.append_states()
                         new_state = self.find_closest_state()
 
-                    self.update_q_values(reward, new_state)
+                    if self.current_state != new_state:
+                        self.update_q_values(reward, new_state)
 
                     if(reward == -1):
                         # message = String()
