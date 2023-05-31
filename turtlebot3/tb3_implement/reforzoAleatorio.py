@@ -27,7 +27,7 @@ TH_R_IMAGE = 0.8
 W = 8
 H = 6
 X = 35
-Y = 45
+Y = 72
 
 MODEL = 'turtlebot3_burger'
 
@@ -118,25 +118,28 @@ class TeleoperationNode:
         coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
 
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
-        print(percentage)
+        #print(percentage)
         
         return percentage >= threshold
 
     def find_closest_velocity(self):
         print("estados", len(self.stored_images))
        
+        list_dist = []
         if len(self.stored_images) == 0:
             return None
         min_dist = float('inf')
         min_idx = -1
         for i, img in enumerate(self.stored_images):
             distance = numpy.sum((cv2.absdiff(self.image.flatten(), img.flatten()) ** 2))
-            print(distance, i)
+            list_dist.append([distance, i])
             if distance < min_dist:
                 min_dist = distance
                 min_idx = i
 
-        #print(len(self.stored_images), min_idx, min_dist, self.stored_velocities[min_idx].linear.x, self.stored_velocities[min_idx].angular.z)
+        print(list_dist)
+        list_dist = []
+
         if min_dist > TH_DIST_IMAGE:
             return None
         else:
@@ -195,7 +198,7 @@ class TeleoperationNode:
             img_data.modify_exif(metadata)
             
     
-    def teleop(self):
+    def train(self):
         self.load_images()
         self.bag = rosbag.Bag(self.bag_file, 'w')
         while not rospy.is_shutdown():
@@ -234,9 +237,8 @@ class TeleoperationNode:
                     # self.bag.write('/action', message, current_time)
 
                     
-                    self.bag.write('/position', self.robot_position, current_time)
+                    # self.bag.write('/position', self.robot_position, current_time)
 
-                    print("Se ha encontrado coincidiencia, adoptando velocidad correspondiente\n")
                     twist = Twist()
 
                     twist.linear.x = closest_velocity[0]; twist.linear.y = 0.0; twist.linear.z = 0.0
@@ -306,7 +308,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTSTP, signal_handler)
 
-    node.teleop()
+    node.train()
 
     node.stop_robot()
     

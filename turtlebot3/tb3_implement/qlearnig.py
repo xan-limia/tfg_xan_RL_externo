@@ -4,6 +4,7 @@ import cv2, numpy, pyexiv2
 import os, sys, signal
 import datetime
 import random
+from collections import deque
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Pose, Quaternion
@@ -26,8 +27,8 @@ TH_DIST_IMAGE = 650000
 TH_R_IMAGE = 0.8
 W = 8
 H = 6
-X = 35
-Y = 45
+X = 36
+Y = 52
 
 EPSILON = 0.1
 ACTIONS = 5
@@ -54,10 +55,9 @@ class TeleoperationNode:
         self.img_msg = None
         self.robot_position = None
 
-        
-
         self.stored_images = []
         self.q_values = []
+        self.valid_pos = deque(maxlen=10)
 
         self.stored_velocities = []
         self.number_states = 0
@@ -83,7 +83,7 @@ class TeleoperationNode:
     
     def position_callback(self, msg):
         robot_index = msg.name.index('turtlebot3_burger')
-        self.robot_position = msg.pose[robot_index].position
+        self.robot_position = msg.pose[robot_index]
 
     def image_callback(self, data):
         self.img_msg = data
@@ -130,26 +130,31 @@ class TeleoperationNode:
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
         # print(percentage)
 
-        if(percentage >= threshold):
-            return 0
+        # if percentage == 1.0:
+        #     return 1
+        if percentage >= threshold:
+            return 1
         else:
             return -1
 
     def find_closest_state(self):
         print("estados", len(self.stored_images))
-       
+
+        list_dist = []
         if len(self.stored_images) == 0:
             return None
         min_dist = float('inf')
         min_idx = -1
         for i, img in enumerate(self.stored_images):
             distance = numpy.sum((cv2.absdiff(self.image.flatten(), img.flatten()) ** 2))
-            print(distance, i)
+            list_dist.append([distance, i])
             if distance < min_dist:
                 min_dist = distance
                 min_idx = i
 
-        #print(len(self.stored_images), min_idx, min_dist, self.stored_velocities[min_idx].linear.x, self.stored_velocities[min_idx].angular.z)
+        print(list_dist)
+        list_dist = []
+
         if min_dist > TH_DIST_IMAGE:
             return None
         else:
@@ -161,7 +166,7 @@ class TeleoperationNode:
             init_q_values = [random.uniform(0, 0.1) for _ in range(5)] # inicializar de forma aleatoria 0 e 0.1
             self.q_values.append(init_q_values) 
             self.last_index_action = len(self.stored_images) - 1
-            print("salvados", len(self.stored_images))
+            # print("salvados", len(self.stored_images))
         # self.img_msg = None
         # self.image = None
         self.number_states = len(self.stored_images)
@@ -206,7 +211,7 @@ class TeleoperationNode:
         current_q_value = self.q_values[self.current_state][self.last_action]
 
         new_q_values = self.q_values[new_state]
-        print(self.q_values[new_state], new_q_values)
+        print(self.q_values[self.current_state])
         max_q_value = numpy.amax(new_q_values, axis=None)
 
         new_q_value = current_q_value + LEARNING_RATE * (reward + DISCOUNT_FACTOR * max_q_value - current_q_value)
@@ -217,12 +222,25 @@ class TeleoperationNode:
     ## REINICIAR POSICION ROBOT
         
     def reset_position(self):
+        # print(len(self.valid_pos))     
+        if self.valid_pos:
+            last_pos = self.valid_pos[-1]
+        else: # Posicion inicial
+            model_state = ModelState()
+            model_state.model_name = MODEL 
+            model_state.pose.position.x = 0.244979
+            model_state.pose.position.y = -1.786919
+            model_state.pose.position.z = -0.001002
+            self.set_position(model_state)
+            return
+        
         model_state = ModelState()
         model_state.model_name = MODEL 
-        model_state.pose.position.x = 0.244979
-        model_state.pose.position.y = -1.786919
-        model_state.pose.position.z = -0.001002
+        model_state.pose = last_pos
         self.set_position(model_state)
+
+            
+
 
     ## DETER ROBOT
 
@@ -259,13 +277,13 @@ class TeleoperationNode:
             img_data.modify_exif(metadata)
             
     
-    def teleop(self):
+    def train(self):
         self.load_images()
-        self.bag = rosbag.Bag(self.bag_file, 'w')
+        # self.bag = rosbag.Bag(self.bag_file, 'w')
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             if self.image is not None:
-
+                
                 self.current_state = self.find_closest_state()
             
                 if self.current_state is not None:
@@ -286,21 +304,40 @@ class TeleoperationNode:
                     reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
 
                     new_state = self.find_closest_state()
-                    print(new_state)
+                    
                     if new_state is None: # estado novo
                         self.stop_robot() # eliminar no real
                         self.append_states()
+                        # n_state = True
                         new_state = self.find_closest_state()
-
-                    if self.current_state != new_state:
-                        self.update_q_values(reward, new_state)
+                    # else:
+                    #     n_state = False
+                    
+                    # if self.current_state != new_state:
+                    #     self.update_q_values(reward, new_state)
+                    self.update_q_values(reward, new_state)
 
                     if(reward == -1):
                         # message = String()
                         # message.data = "reinforcement detected"
                         # self.bag.write('/reinforcement', message, current_time)
+                        # if(n_state == True):
+                        #     self.stored_images.pop()
+                        #     self.q_values.pop()
+
                         self.reset_position()
-                    
+                        self.time_last_pose_saved = datetime.datetime.now()
+                    else:
+                        if self.valid_pos:
+                            time = datetime.datetime.now()
+                            time_diff = time - self.time_last_pose_saved
+                            if time_diff.seconds >= 10:
+                                self.valid_pos.append(self.robot_position)
+                                self.time_last_pose_saved = time
+                        else:
+                            time = datetime.datetime.now()
+                            self.valid_pos.append(self.robot_position)
+                            self.time_last_pose_saved = time
 
                 else:
                     self.stop_robot()
@@ -326,14 +363,14 @@ if __name__ == '__main__':
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
         node.velocity_publisher.publish(twist)
 
-        node.bag.close()
+        # node.bag.close()
 
         exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTSTP, signal_handler)
 
-    node.teleop()
+    node.train()
 
     node.stop_robot()
     
