@@ -30,7 +30,7 @@ H = 6
 X = 36
 Y = 52
 
-EPSILON = 0.1
+EPSILON = 0.0
 ACTIONS = 5
 
 LEARNING_RATE = 0.1
@@ -130,10 +130,8 @@ class TeleoperationNode:
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
         # print(percentage)
 
-        # if percentage == 1.0:
-        #     return 1
         if percentage >= threshold:
-            return 1
+            return 0.01
         else:
             return -1
 
@@ -163,7 +161,7 @@ class TeleoperationNode:
     def append_states(self):
         if self.image is not None:
             self.stored_images.append(self.image)
-            init_q_values = [random.uniform(0, 0.1) for _ in range(5)] # inicializar de forma aleatoria 0 e 0.1
+            init_q_values = [random.uniform(0, 0.1) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
             self.q_values.append(init_q_values) 
             self.last_index_action = len(self.stored_images) - 1
             # print("salvados", len(self.stored_images))
@@ -279,7 +277,7 @@ class TeleoperationNode:
     
     def train(self):
         self.load_images()
-        # self.bag = rosbag.Bag(self.bag_file, 'w')
+        self.bag = rosbag.Bag(self.bag_file, 'w')
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             if self.image is not None:
@@ -287,11 +285,11 @@ class TeleoperationNode:
                 self.current_state = self.find_closest_state()
             
                 if self.current_state is not None:
-                    # message = String()
-                    # message.data = f"{self.current_state}"
-                    # topic = f"/state_{self.current_state}"
-                    # self.bag.write(topic, message, current_time)
-                    # self.bag.write('/position', self.robot_position, current_time)
+                    message = String()
+                    message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
+                    topic = f"/state_{self.current_state}"
+                    self.bag.write(topic, message, current_time)
+                    self.bag.write('/position', self.robot_position, current_time)
 
                     #print("Se ha encontrado coincidiencia, el estado existe\n")
                     
@@ -308,22 +306,17 @@ class TeleoperationNode:
                     if new_state is None: # estado novo
                         self.stop_robot() # eliminar no real
                         self.append_states()
-                        # n_state = True
                         new_state = self.find_closest_state()
-                    # else:
-                    #     n_state = False
+                    
                     
                     # if self.current_state != new_state:
                     #     self.update_q_values(reward, new_state)
                     self.update_q_values(reward, new_state)
 
                     if(reward == -1):
-                        # message = String()
-                        # message.data = "reinforcement detected"
-                        # self.bag.write('/reinforcement', message, current_time)
-                        # if(n_state == True):
-                        #     self.stored_images.pop()
-                        #     self.q_values.pop()
+                        message = String()
+                        message.data = "reinforcement detected"
+                        self.bag.write('/reinforcement', message, current_time)
 
                         self.reset_position()
                         self.time_last_pose_saved = datetime.datetime.now()
@@ -363,7 +356,7 @@ if __name__ == '__main__':
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
         node.velocity_publisher.publish(twist)
 
-        # node.bag.close()
+        node.bag.close()
 
         exit(0)
 
