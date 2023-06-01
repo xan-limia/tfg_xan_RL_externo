@@ -289,7 +289,7 @@ class TeleoperationNode:
                     message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
                     topic = f"/state_{self.current_state}"
                     self.bag.write(topic, message, current_time)
-                    self.bag.write('/position', self.robot_position, current_time)
+                    # self.bag.write('/position', self.robot_position, current_time)
 
                     #print("Se ha encontrado coincidiencia, el estado existe\n")
                     
