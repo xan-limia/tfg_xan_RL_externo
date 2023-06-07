@@ -11,47 +11,59 @@ from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String
 
-msg = """
-Introduce la direccion
----------------------------
-1 Avanzar Recto
-2 Xiro Esquerda
-3 Xiro Esquerda Brusco
-4 Xiro Dereita
-5 Xiro Dereita Brusco
-Ctrl+C to quit
-"""
+# Ctrl+C to quit
 
-TH_DIST_IMAGE = 650000
+# Posibles Accions
+# ---------------------------
+# 0 Avanzar Recto
+# 1 Xiro Esquerda
+# 2 Xiro Esquerda Brusco
+# 3 Xiro Dereita
+# 4 Xiro Dereita Brusco
+
+ACTIONS = 5
+
+# THRESHOLDS
+TH_DIST_IMAGE = 600000
 TH_R_IMAGE = 0.8
+
+# AREA REFORZO
 W = 8
 H = 6
-X = 35
-Y = 72
+X = 36
+Y = 52
 
+# PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
+TOPIC_VEL = '/cmd_vel'
+TOPIC_CAMERA = '/camera/image'
+TOPIC_MODEL_STATE = '/gazebo/model_states'
+TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
+TOPIC_REINFORCEMENT = '/reinforcement'
 
-class TeleoperationNode:
+class RandomLNode:
     def __init__(self, foldername):
-        rospy.init_node('teleoperation')
-        self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.image_subscriber = rospy.Subscriber('/camera/image', Image, self.image_callback)
-        #self.turtlebot3_model = rospy.get_param("model", "burger")
-        self.model_position = rospy.Subscriber("/gazebo/model_states", ModelStates, self.position_callback)
-        self.set_position = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
+
+        rospy.init_node('randomLearning')
+        self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
+        self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)
+        self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
+        self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
+        self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
 
 
         self.bridge = CvBridge()
         cv2.namedWindow("window", 1) 
 
         self.image = None
-        self.img_msg = None
         self.robot_position = None
 
         self.stored_images = []
-        self.stored_velocities = []
+        self.state_action = []
         self.last_index_action = None
-        #self.penultimate_index_action = None
+
+        self.actions = [(0.15, 0.0), (0.15, 0.54), (0.15, 0.90), (0.15, -0.54), (0.15, -0.90)]
+
 
         self.folder = foldername
 
@@ -62,20 +74,18 @@ class TeleoperationNode:
 
         self.number_states = 0
 
-        self.target_linear_vel   = 0.0
-        self.target_angular_vel  = 0.0
-        self.control_linear_vel  = 0.0
-        self.control_angular_vel = 0.0
+        self.linear_vel   = 0.0
+        self.angular_vel  = 0.0
+        
 
-    def vels(self, target_linear_vel, target_angular_vel):
-        return "currently:\tlinear vel %s\t angular vel %s " % (target_linear_vel,target_angular_vel)
+    def vels(self, linear_vel, angular_vel):
+        return "currently:\tlinear vel %s\t angular vel %s " % (linear_vel,angular_vel)
     
     def position_callback(self, msg):
-        robot_index = msg.name.index('turtlebot3_burger')
-        self.robot_position = msg.pose[robot_index].position
+        robot_index = msg.name.index(MODEL)
+        self.robot_position = msg.pose[robot_index]
 
     def image_callback(self, data):
-        self.img_msg = data
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
         self.image = self.mask_images(image_bridge)
         # self.image = image_bridge ## Descomentar para executar sen mascara
@@ -102,7 +112,7 @@ class TeleoperationNode:
                 text = metadata['Exif.Photo.UserComment']               
                 linear_vel = float(text.split("=")[1].split("\n")[0])
                 angular_vel = float(text.split("=")[2])
-                self.stored_velocities.append((linear_vel, angular_vel))
+                self.state_action.append((linear_vel, angular_vel))
         
         self.number_states = len(self.stored_images)
 
@@ -143,9 +153,25 @@ class TeleoperationNode:
         if min_dist > TH_DIST_IMAGE:
             return None
         else:
-            # self.penultimate_index_action = self.last_index_action
             self.last_index_action = min_idx
-            return self.stored_velocities[min_idx]
+            return self.state_action[min_idx]
+        
+    def random_action(self):
+        action = numpy.random.randint(ACTIONS)  
+        return action
+    
+    def execute_action(self, action):
+    
+        self.linear_vel = self.actions[action][0]
+        self.angular_vel = self.actions[action][1]
+
+        twist = Twist()
+
+        twist.linear.x = self.linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
+
+        self.velocity_publisher.publish(twist)
         
     def reset_position(self):
         model_state = ModelState()
@@ -156,7 +182,7 @@ class TeleoperationNode:
         self.set_position(model_state)
 
     def stop_robot(self):
-        print("No hay coincidencias, denetiendo robot\n")
+        # print("No hay coincidencias, denetiendo robot\n")
         twist = Twist()
         twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
@@ -165,14 +191,14 @@ class TeleoperationNode:
     def append_states(self):
         if self.image is not None:
             self.stored_images.append(self.image)
-            self.stored_velocities.append((self.target_linear_vel, self.target_angular_vel))
-            # self.penultimate_index_action = self.last_index_action
+            self.state_action.append((self.linear_vel, self.angular_vel))
             self.last_index_action = len(self.stored_images) - 1
             print("salvados", len(self.stored_images))
-        self.img_msg = None
         self.image = None
         self.write = False
         self.number_states = len(self.stored_images)
+
+    
 
     def write_images(self):
 
@@ -194,7 +220,7 @@ class TeleoperationNode:
             img_data = pyexiv2.Image(filepath)
             metadata = img_data.read_exif()
             # Agregar metadato
-            metadata['Exif.Photo.UserComment'] = f"linear={self.stored_velocities[i][0]}\nangular={self.stored_velocities[i][1]}"
+            metadata['Exif.Photo.UserComment'] = f"linear={self.state_action[i][0]}\nangular={self.state_action[i][1]}"
             img_data.modify_exif(metadata)
             
     
@@ -208,16 +234,13 @@ class TeleoperationNode:
                 result = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
                 if(result == False):
                     message = String()
+                    message.data = f"negative reinforcement detected in state {self.current_state}"
+                    self.reinforcement_publisher.publish(message)
+                    self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
 
-                    message.data = f"reinforcement detected, delete state: {self.last_index_action}"
-                    self.bag.write('/reinforcement', message, current_time)
-
-                    print("refuerzo negativo, reseteando posicion\n")
-                    if self.last_index_action is not None: # and len(self.stored_images) > 1 and self.last_index_action != self.penultimate_index_action:
-                        #del self.stored_images[self.penultimate_index_action]
+                    if self.last_index_action is not None: 
                         del self.stored_images[self.last_index_action]
-                        #del self.stored_velocities[self.penultimate_index_action]
-                        del self.stored_velocities[self.last_index_action]
+                        del self.state_action[self.last_index_action]
                        
                     self.reset_position()
 
@@ -225,19 +248,9 @@ class TeleoperationNode:
             
                 if closest_velocity is not None:
                     message = String()
-
-                    # message.data = f"n states: {self.number_states} -> selected: {self.last_index_action}"
-                    # self.bag.write('/states', message, current_time)
-
-                    message.data = f"{self.last_index_action}"
-                    topic = f"/state_{self.last_index_action}"
+                    message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
+                    topic = f"/state_{self.current_state}"
                     self.bag.write(topic, message, current_time)
-
-                    # message.data = f"linear: {closest_velocity[0]} angular: {closest_velocity[1]}"
-                    # self.bag.write('/action', message, current_time)
-
-                    
-                    # self.bag.write('/position', self.robot_position, current_time)
 
                     twist = Twist()
 
@@ -249,36 +262,9 @@ class TeleoperationNode:
                 else:
                     self.stop_robot()
 
-                    random_action = random.randint(1, 5)
+                    random_action = self.random_action()
 
-                    if random_action == 1:
-                        self.target_linear_vel = 0.15
-                        self.target_angular_vel = 0.0
-                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif random_action == 2:
-                        self.target_angular_vel = 0.54
-                        self.target_linear_vel = 0.15
-                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif random_action == 3:
-                        self.target_angular_vel = 0.90
-                        self.target_linear_vel = 0.15
-                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif random_action == 4:
-                        self.target_angular_vel = -0.54
-                        self.target_linear_vel = 0.15
-                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
-                    elif random_action == 5:
-                        self.target_angular_vel = -0.90
-                        self.target_linear_vel = 0.15
-                        print(self.vels(self.target_linear_vel,self.target_angular_vel))
-
-                    twist = Twist()
-
-                    twist.linear.x = self.target_linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
-
-                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.target_angular_vel
-
-                    self.velocity_publisher.publish(twist)
+                    self.execute_action(random_action)
 
                     self.append_states()
 
@@ -290,16 +276,17 @@ if __name__ == '__main__':
         sys.exit()
     foldername = sys.argv[1]
 
-    node = TeleoperationNode(foldername)
+    node = RandomLNode(foldername)
 
     def signal_handler(sig, frame):
         #print("Programa detenido")
         node.write_images()
 
-        twist = Twist()
-        twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
-        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
-        node.velocity_publisher.publish(twist)
+        # twist = Twist()
+        # twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
+        # twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
+        # node.velocity_publisher.publish(twist)
+        node.stop_robot()
 
         node.bag.close()
 

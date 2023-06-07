@@ -12,58 +12,70 @@ from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String
 
-msg = """
-Introduce la direccion
----------------------------
-1 Avanzar Recto
-2 Xiro Esquerda
-3 Xiro Esquerda Brusco
-4 Xiro Dereita
-5 Xiro Dereita Brusco
-Ctrl+C to quit
-"""
 
+# Ctrl+C to quit
+
+# Posibles Accions
+# ---------------------------
+# 0 Avanzar Recto
+# 1 Xiro Esquerda
+# 2 Xiro Esquerda Brusco
+# 3 Xiro Dereita
+# 4 Xiro Dereita Brusco
+
+ACTIONS = 5
+
+# THRESHOLDS
 TH_DIST_IMAGE = 650000
 TH_R_IMAGE = 0.8
+
+# AREA REFORZO
 W = 8
 H = 6
 X = 36
 Y = 52
 
-EPSILON = 0.0
-ACTIONS = 5
+# POLITICAE-GREEDY
+EPSILON = 0.05
 
-LEARNING_RATE = 0.1
+# PARAMETROS Q-LEARNING
+LEARNING_RATE = 0.1 
 DISCOUNT_FACTOR = 0.9
 
+# PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
+TOPIC_VEL = '/cmd_vel'
+TOPIC_CAMERA = '/camera/image'
+TOPIC_MODEL_STATE = '/gazebo/model_states'
+TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
+TOPIC_REINFORCEMENT = '/reinforcement'
 
-class TeleoperationNode:
+class QLNode:
     def __init__(self, foldername):
-        rospy.init_node('teleoperation')
-        self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.image_subscriber = rospy.Subscriber('/camera/image', Image, self.image_callback)
-        #self.turtlebot3_model = rospy.get_param("model", "burger")
-        self.model_position = rospy.Subscriber("/gazebo/model_states", ModelStates, self.position_callback)
-        self.set_position = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
 
+        rospy.init_node('qlearning')
+        self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
+        self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)
+        self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
+        self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
+        self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
 
         self.bridge = CvBridge()
         cv2.namedWindow("window", 1) 
 
         self.image = None
-        self.img_msg = None
         self.robot_position = None
 
         self.stored_images = []
         self.q_values = []
         self.valid_pos = deque(maxlen=10)
 
+        self.actions = [(0.15, 0.0), (0.15, 0.54), (0.15, 0.90), (0.15, -0.54), (0.15, -0.90)]
+
         self.stored_velocities = []
         self.number_states = 0
         self.current_state = None
         self.last_action = None
-        #self.penultimate_index_action = None
 
         self.folder = foldername
 
@@ -72,21 +84,19 @@ class TeleoperationNode:
         self.bag_file = os.path.join(os.getcwd(), bag_name)
         self.bag = None
 
-       
-        self.target_linear_vel   = 0.0
-        self.target_angular_vel  = 0.0
-        self.control_linear_vel  = 0.0
-        self.control_angular_vel = 0.0
+        self.linear_vel   = 0.0
+        self.angular_vel  = 0.0
 
-    def vels(self, target_linear_vel, target_angular_vel):
-        return "currently:\tlinear vel %s\t angular vel %s " % (target_linear_vel,target_angular_vel)
+    def vels(self, linear_vel, angular_vel):
+        return "currently:\tlinear vel %s\t angular vel %s " % (linear_vel,angular_vel)
     
     def position_callback(self, msg):
-        robot_index = msg.name.index('turtlebot3_burger')
+        robot_index = msg.name.index(MODEL)
         self.robot_position = msg.pose[robot_index]
 
+    # IMAXES
+
     def image_callback(self, data):
-        self.img_msg = data
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
         self.image = self.mask_images(image_bridge)
         # self.image = image_bridge ## Descomentar para executar sen mascara
@@ -99,7 +109,7 @@ class TeleoperationNode:
     
     def load_images(self):
         if not os.path.exists(self.folder):
-            os.makedirs(self.folder)
+            os.makedirs(self.folder) # crear directorio se non existe
             return
         for filename in os.listdir(self.folder):
             if(filename.endswith('.png')):
@@ -108,8 +118,10 @@ class TeleoperationNode:
                 self.stored_images.append(maskImg)
                 # self.stored_images.append(img) # Gardar imaxe sen mascara
 
-                img = pyexiv2.Image(os.path.join(self.folder, filename))
-                metadata = img.read_exif()
+                img = pyexiv2.Image(os.path.join(self.folder, filename)) # ler a imaxe con pyexiv para acceder os metadatos
+                metadata = img.read_exif() # ler metadato
+
+                # Transformar string nun vector q values
                 text = metadata['Exif.Photo.UserComment']  
                 q_values = eval(text.split("=")[1])
                 self.q_values.append(q_values)
@@ -153,57 +165,50 @@ class TeleoperationNode:
         print(list_dist)
         list_dist = []
 
-        if min_dist > TH_DIST_IMAGE:
+        if min_dist > TH_DIST_IMAGE: # estado novo
             return None
         else:
             return min_idx # detectamos estado actual
         
     def append_states(self):
         if self.image is not None:
-            self.stored_images.append(self.image)
+            self.stored_images.append(self.image) # novo estado
             init_q_values = [random.uniform(0, 0.1) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
-            self.q_values.append(init_q_values) 
-            self.last_index_action = len(self.stored_images) - 1
-            # print("salvados", len(self.stored_images))
-        # self.img_msg = None
-        # self.image = None
+            self.q_values.append(init_q_values) # q values novo estado
         self.number_states = len(self.stored_images)
 
     ## ACCIONS
 
-    def select_action(self):
-
+    def random_action(self):
+        action = numpy.random.randint(ACTIONS)
+        return action
+    
+    def best_action(self):
         q_values = self.q_values[self.current_state]
+        action = numpy.argmax(q_values)
+        return action
+
+    def select_action(self):
         if numpy.random.random() < EPSILON:
-            action = numpy.random.randint(5)  # Explorar mais ao principio
+            action = self.random_action()  # Explorar mais ao principio
         else:
-            action = numpy.argmax(q_values)
+            action = self.best_action()
         return action
     
     def execute_action(self, action):
-        if action == 0:
-            self.target_linear_vel = 0.15
-            self.target_angular_vel = 0.0
-        elif action == 1:
-            self.target_angular_vel = 0.54
-            self.target_linear_vel = 0.15
-        elif action == 2:
-            self.target_angular_vel = 0.90
-            self.target_linear_vel = 0.15
-        elif action == 3:
-            self.target_angular_vel = -0.54
-            self.target_linear_vel = 0.15
-        elif action == 4:
-            self.target_angular_vel = -0.90
-            self.target_linear_vel = 0.15
+    
+        self.linear_vel = self.actions[action][0]
+        self.angular_vel = self.actions[action][1]
 
         twist = Twist()
 
-        twist.linear.x = self.target_linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+        twist.linear.x = self.linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.target_angular_vel
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
 
         self.velocity_publisher.publish(twist)
+
+    ## ACTUALIZAR Q VALUES
 
     def update_q_values(self, reward, new_state):
         current_q_value = self.q_values[self.current_state][self.last_action]
@@ -220,37 +225,50 @@ class TeleoperationNode:
     ## REINICIAR POSICION ROBOT
         
     def reset_position(self):
-        # print(len(self.valid_pos))     
-        if self.valid_pos:
+        # print(len(self.valid_pos))
+
+        model_state = ModelState()
+        model_state.model_name = MODEL 
+
+        if self.valid_pos: # ultiuma posicion gardada se a lista non esta vacia
             last_pos = self.valid_pos[-1]
+            model_state.pose = last_pos
+            self.valid_pos.pop()
         else: # Posicion inicial
-            model_state = ModelState()
-            model_state.model_name = MODEL 
             model_state.pose.position.x = 0.244979
             model_state.pose.position.y = -1.786919
             model_state.pose.position.z = -0.001002
-            self.set_position(model_state)
-            return
-        
-        model_state = ModelState()
-        model_state.model_name = MODEL 
-        model_state.pose = last_pos
+            
         self.set_position(model_state)
 
-            
+        self.time_last_pose_saved = datetime.datetime.now() # reiniciamos o tempo de gardado de posicion para evitar que se garde a posicion onde se detecta reforzo
+
+    ## ENGADIR POSICIONS A COLA
+
+    def append_pos(self):
+
+        if self.valid_pos: # Xa existe algunha posicion miramos tempo transcurrido
+            time = datetime.datetime.now()
+            time_diff = time - self.time_last_pose_saved
+            if time_diff.seconds >= 10:
+                self.valid_pos.append(self.robot_position)
+                self.time_last_pose_saved = time
+        else: # se non existe posicion engadimos unha e gardamos o tempo actual
+            self.valid_pos.append(self.robot_position)
+            self.time_last_pose_saved = datetime.datetime.now()
 
 
     ## DETER ROBOT
 
     def stop_robot(self):
-        print("No hay coincidencias, denetiendo robot\n")
+        # print("No hay coincidencias, denetiendo robot\n")
         twist = Twist()
         twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
         node.velocity_publisher.publish(twist)
 
     
-
+    ## GARDAR IMAXES EN DISCO
     def write_images(self):
 
         for archivo in os.listdir(self.folder):
@@ -274,7 +292,7 @@ class TeleoperationNode:
             metadata['Exif.Photo.UserComment'] = f"q_values={self.q_values[i]}"
             img_data.modify_exif(metadata)
             
-    
+    ## ENTRENAR
     def train(self):
         self.load_images()
         self.bag = rosbag.Bag(self.bag_file, 'w')
@@ -282,60 +300,56 @@ class TeleoperationNode:
             current_time = rospy.Time.now()
             if self.image is not None:
                 
-                self.current_state = self.find_closest_state()
+                self.current_state = self.find_closest_state() # encontrar estado actual
+
+                first_frame = self.image
             
                 if self.current_state is not None:
                     message = String()
                     message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
                     topic = f"/state_{self.current_state}"
                     self.bag.write(topic, message, current_time)
-                    # self.bag.write('/position', self.robot_position, current_time)
-
-                    #print("Se ha encontrado coincidiencia, el estado existe\n")
                     
-                    action = self.select_action()
+                    action = self.select_action() # seleccionar accion
 
-                    self.execute_action(action=action)
+                    self.execute_action(action=action) # executar accion selecionada
 
-                    self.last_action = action
+                    self.last_action = action 
 
-                    reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
+                    reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE) # obter recompensa
 
-                    new_state = self.find_closest_state()
+                    last_frame = self.image
+
+                    distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
+
+                    new_state = self.find_closest_state() # obter o estado despois de executar a accion
                     
-                    if new_state is None: # estado novo
+                    if new_state is None: # estado novo (crear)
                         self.stop_robot() # eliminar no real
                         self.append_states()
                         new_state = self.find_closest_state()
                     
-                    
-                    # if self.current_state != new_state:
-                    #     self.update_q_values(reward, new_state)
-                    self.update_q_values(reward, new_state)
+                    self.update_q_values(reward, new_state) # actualizar q_values
 
-                    if(reward == -1):
+                    if reward == -1: # recompensa negativa
                         message = String()
-                        message.data = "reinforcement detected"
-                        self.bag.write('/reinforcement', message, current_time)
+                        message.data = f"negative reinforcement detected in state {self.current_state} when applying action {action}"
+                        self.reinforcement_publisher.publish(message)
+                        self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
 
-                        self.reset_position()
-                        self.time_last_pose_saved = datetime.datetime.now()
+                        self.reset_position() # reiniciar a ultima posicion gardada
+                        
                     else:
-                        if self.valid_pos:
-                            time = datetime.datetime.now()
-                            time_diff = time - self.time_last_pose_saved
-                            if time_diff.seconds >= 10:
-                                self.valid_pos.append(self.robot_position)
-                                self.time_last_pose_saved = time
-                        else:
-                            time = datetime.datetime.now()
-                            self.valid_pos.append(self.robot_position)
-                            self.time_last_pose_saved = time
+                        self.append_pos() # engadir nova posicion a cola
+
+                    self.image = None # reiniciar a imaxe capturada para obligar a ter unha nova
 
                 else:
                     self.stop_robot()
 
-                    self.append_states()
+                    self.append_states() # crear novo estado
+
+                    self.image = None
 
                     
 
@@ -345,25 +359,22 @@ if __name__ == '__main__':
         sys.exit()
     foldername = sys.argv[1]
 
-    node = TeleoperationNode(foldername)
+    node = QLNode(foldername)
 
     def signal_handler(sig, frame):
         #print("Programa detenido")
-        node.write_images()
+        node.write_images() # escribir imaxes en disco
 
-        twist = Twist()
-        twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
-        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
-        node.velocity_publisher.publish(twist)
+        node.stop_robot() # parar robot
 
-        node.bag.close()
+        node.bag.close() # cerrar ficheiro bag
 
         exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTSTP, signal_handler)
 
-    node.train()
+    node.train() # executar entrenamento
 
     node.stop_robot()
     
