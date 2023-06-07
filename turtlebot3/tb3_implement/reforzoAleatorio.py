@@ -154,6 +154,7 @@ class RandomLNode:
             return None
         else:
             self.last_index_action = min_idx
+            self.current_state = min_idx
             return self.state_action[min_idx]
         
     def random_action(self):
