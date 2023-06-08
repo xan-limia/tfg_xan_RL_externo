@@ -1,0 +1,98 @@
+PROBAS Q-LEARNING
+
+Tempo Total -> tempo para dar 2 voltas sen reforzo
+Tempo Reforzo -> tempo dende o inicio ata o ultimo reforzo
+
+EPSILON = 0.05 , DISTANCIA = 650000
+
+Proba 1
+
+Tempo Total: 16' 15''
+Tempo Reforzo: 9' 42''
+Nº estados: 6
+ Estados:	Execucions	Q-Values
+	0	6280		[0.09999999999999923, 0.09988397799916772, 0.09993503318836287, 0.09995995092239172, 0.09998649878326663]
+	1	1103		[-0.13047206099427722, -0.13114248456250677, 0.059233094494271187, -0.1489491795403659, -0.1385152375574669]
+	2	171		[-0.01024897116996831, -0.01903595555833308, 0.05967565982908946, -0.06889228654639667, -0.12184957631695854]
+	3	435		[0.019762035023349014, -0.0024096275535656856, 0.022992078438203216, 0.006183120632343331, 0.0955493282364648]
+	4	1034		[0.06856388317715477, 0.017173288745452635, 0.09987660457354611, 0.019306631357449415, 0.07523280492787396]
+	5	591		[0.07230026765309, 0.0528595162942405, 0.04115344587516462, 0.07374177470021082, 0.09995831887213745]
+Reforzos: 37
+
+Proba 2
+	
+Tempo Total: 18' 00''
+Tempo Reforzo: 11' 41''
+Nº estados: 6
+ Estados:	Execucions
+	0	5210
+	1	1386
+	2	573
+	3	861
+	4	2212
+	5	412
+Reforzos: 39
+
+Proba 3
+
+Tempo Total: 15' 5''
+Tempo Reforzo: 8' 44''
+Nº estados: 5
+ Estados:	Execucions	Q-Values
+	0	4020		
+	1	2026		
+	2	1991		
+	3	856		
+	4	26					
+Reforzos: 18
+
+EPSILON = 0.00 , DISTANCIA = 650000
+
+Prueba 1
+
+Tempo Total: 15' 15''
+Tempo Reforzo: 8' 57''
+Nº estados: 5
+ Estados:	Execucions	Q-Values
+	0	4288	
+	1	861		
+	2	2768		
+	3	1000		
+	4	108					
+Reforzos: 25
+
+Prueba 2
+
+Tempo Total: 19' 17''
+Tempo Reforzo: 13' 11''
+Nº estados: 4
+ Estados:	Execucions	Q-Values
+	0	4174	
+	1	3578		
+	2	2758		
+	3	891							
+Reforzos: 15
+
+EPSILON = 0.05 , DISTANCIA = 500000
+
+Prueba 1
+
+Tempo Total: 40' 10''
+Tempo Reforzo: Non converxeu todavia
+Nº estados: 10
+ Estados:	Execucions	Q-Values
+	0	3962	
+	1	7676		
+	2	1963		
+	3	1732
+	4	4768
+	5	1533
+	6	474
+	7	730
+	8	130
+	9	251							
+Reforzos: 156
+
+
+
+		

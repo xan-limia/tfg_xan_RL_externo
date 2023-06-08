@@ -195,8 +195,6 @@ class RandomLNode:
             self.state_action.append((self.linear_vel, self.angular_vel))
             self.last_index_action = len(self.stored_images) - 1
             print("salvados", len(self.stored_images))
-        self.image = None
-        self.write = False
         self.number_states = len(self.stored_images)
 
     
@@ -260,6 +258,8 @@ class RandomLNode:
                     twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = closest_velocity[1]
 
                     self.velocity_publisher.publish(twist)
+
+                    self.image = None
                 else:
                     self.stop_robot()
 
@@ -268,6 +268,8 @@ class RandomLNode:
                     self.execute_action(random_action)
 
                     self.append_states()
+
+                    self.image = None
 
                     
 
