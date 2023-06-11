@@ -36,7 +36,7 @@ X = 36
 Y = 52
 
 # POLITICAE-GREEDY
-EPSILON = 0.05
+EPSILON = 0.00
 
 # PARAMETROS Q-LEARNING
 LEARNING_RATE = 0.1 
@@ -301,6 +301,7 @@ class QLNode:
             if self.image is not None:
                 
                 self.current_state = self.find_closest_state() # encontrar estado actual
+                print("estado actual: ", self.current_state)
 
                 first_frame = self.image
             
@@ -313,8 +314,14 @@ class QLNode:
                     action = self.select_action() # seleccionar accion
 
                     self.execute_action(action=action) # executar accion selecionada
+                    print("accion: ", action)
 
                     self.last_action = action 
+                    
+                    self.image = None
+
+                    while self.image is None:
+                        pass
 
                     reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE) # obter recompensa
 
@@ -325,15 +332,20 @@ class QLNode:
                     new_state = self.find_closest_state() # obter o estado despois de executar a accion
                     
                     if new_state is None: # estado novo (crear)
+                        print(new_state)
                         self.stop_robot() # eliminar no real
                         self.append_states()
                         new_state = self.find_closest_state()
+
+                    print("estado siguiente: ", new_state)
+                    
                     
                     self.update_q_values(reward, new_state) # actualizar q_values
 
                     if reward == -1: # recompensa negativa
                         message = String()
-                        message.data = f"negative reinforcement detected in state {self.current_state} when applying action {action}"
+                        now = datetime.datetime.now()
+                        message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
                         self.reinforcement_publisher.publish(message)
                         self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
 
