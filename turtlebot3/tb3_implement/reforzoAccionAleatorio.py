@@ -4,14 +4,12 @@ import cv2, numpy, pyexiv2
 import os, sys, signal
 import datetime
 import random
-from collections import deque
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Pose, Quaternion
 from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String
-
 
 # Ctrl+C to quit
 
@@ -26,7 +24,7 @@ from std_msgs.msg import String
 ACTIONS = 5
 
 # THRESHOLDS
-TH_DIST_IMAGE = 300000
+TH_DIST_IMAGE = 600000
 TH_R_IMAGE = 0.8
 
 # AREA REFORZO
@@ -34,13 +32,6 @@ W = 8
 H = 6
 X = 36
 Y = 52
-
-# POLITICAE-GREEDY
-EPSILON = 0.00
-
-# PARAMETROS Q-LEARNING
-LEARNING_RATE = 0.1 
-DISCOUNT_FACTOR = 0.9
 
 # PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
@@ -50,15 +41,16 @@ TOPIC_MODEL_STATE = '/gazebo/model_states'
 TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
 TOPIC_REINFORCEMENT = '/reinforcement'
 
-class QLNode:
+class RandomNode:
     def __init__(self, foldername):
 
-        rospy.init_node('qlearning')
+        rospy.init_node('randomLearning')
         self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
         self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)
         self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
         self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
         self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
+
 
         self.bridge = CvBridge()
         cv2.namedWindow("window", 1) 
@@ -67,15 +59,11 @@ class QLNode:
         self.robot_position = None
 
         self.stored_images = []
-        self.q_values = []
-        self.valid_pos = deque(maxlen=10)
+        self.state_action = []
+        self.last_index_action = None
 
         self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
 
-        self.stored_velocities = []
-        self.number_states = 0
-        self.current_state = None
-        self.last_action = None
 
         self.folder = foldername
 
@@ -84,8 +72,11 @@ class QLNode:
         self.bag_file = os.path.join(os.getcwd(), bag_name)
         self.bag = None
 
+        self.number_states = 0
+
         self.linear_vel   = 0.0
         self.angular_vel  = 0.0
+        
 
     def vels(self, linear_vel, angular_vel):
         return "currently:\tlinear vel %s\t angular vel %s " % (linear_vel,angular_vel)
@@ -93,8 +84,6 @@ class QLNode:
     def position_callback(self, msg):
         robot_index = msg.name.index(MODEL)
         self.robot_position = msg.pose[robot_index]
-
-    # IMAXES
 
     def image_callback(self, data):
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
@@ -109,7 +98,7 @@ class QLNode:
     
     def load_images(self):
         if not os.path.exists(self.folder):
-            os.makedirs(self.folder) # crear directorio se non existe
+            os.makedirs(self.folder)
             return
         for filename in os.listdir(self.folder):
             if(filename.endswith('.png')):
@@ -118,13 +107,12 @@ class QLNode:
                 self.stored_images.append(maskImg)
                 # self.stored_images.append(img) # Gardar imaxe sen mascara
 
-                img = pyexiv2.Image(os.path.join(self.folder, filename)) # ler a imaxe con pyexiv para acceder os metadatos
-                metadata = img.read_exif() # ler metadato
-
-                # Transformar string nun vector q values
-                text = metadata['Exif.Photo.UserComment']  
-                q_values = eval(text.split("=")[1])
-                self.q_values.append(q_values)
+                img = pyexiv2.Image(os.path.join(self.folder, filename))
+                metadata = img.read_exif()
+                text = metadata['Exif.Photo.UserComment']               
+                linear_vel = float(text.split("=")[1].split("\n")[0])
+                angular_vel = float(text.split("=")[2])
+                self.state_action.append((linear_vel, angular_vel))
         
         self.number_states = len(self.stored_images)
 
@@ -140,16 +128,13 @@ class QLNode:
         coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
 
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
-        # print(percentage)
+        #print(percentage)
+        
+        return percentage >= threshold
 
-        if percentage >= threshold:
-            return 0.01
-        else:
-            return -1
-
-    def find_closest_state(self):
+    def find_closest_velocity(self):
         print("estados", len(self.stored_images))
-
+       
         list_dist = []
         if len(self.stored_images) == 0:
             return None
@@ -165,34 +150,15 @@ class QLNode:
         print(list_dist)
         list_dist = []
 
-        if min_dist > TH_DIST_IMAGE: # estado novo
+        if min_dist > TH_DIST_IMAGE:
             return None
         else:
-            return min_idx # detectamos estado actual
+            self.last_index_action = min_idx
+            self.current_state = min_idx
+            return self.state_action[min_idx]
         
-    def append_states(self):
-        if self.image is not None:
-            self.stored_images.append(self.image) # novo estado
-            init_q_values = [random.uniform(0, 0.1) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
-            self.q_values.append(init_q_values) # q values novo estado
-        self.number_states = len(self.stored_images)
-
-    ## ACCIONS
-
     def random_action(self):
-        action = numpy.random.randint(ACTIONS)
-        return action
-    
-    def best_action(self):
-        q_values = self.q_values[self.current_state]
-        action = numpy.argmax(q_values)
-        return action
-
-    def select_action(self):
-        if numpy.random.random() < EPSILON:
-            action = self.random_action()  # Explorar mais ao principio
-        else:
-            action = self.best_action()
+        action = numpy.random.randint(ACTIONS)  
         return action
     
     def execute_action(self, action):
@@ -207,58 +173,14 @@ class QLNode:
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
 
         self.velocity_publisher.publish(twist)
-
-    ## ACTUALIZAR Q VALUES
-
-    def update_q_values(self, reward, new_state):
-        current_q_value = self.q_values[self.current_state][self.last_action]
-
-        new_q_values = self.q_values[new_state]
-        print(self.q_values[self.current_state])
-        max_q_value = numpy.amax(new_q_values, axis=None)
-
-        new_q_value = current_q_value + LEARNING_RATE * (reward + DISCOUNT_FACTOR * max_q_value - current_q_value)
-        self.q_values[self.current_state][self.last_action] = new_q_value
-
-        
-
-    ## REINICIAR POSICION ROBOT
         
     def reset_position(self):
-        # print(len(self.valid_pos))
-
         model_state = ModelState()
         model_state.model_name = MODEL 
-
-        if self.valid_pos: # ultiuma posicion gardada se a lista non esta vacia
-            last_pos = self.valid_pos[-1]
-            model_state.pose = last_pos
-            self.valid_pos.pop()
-        else: # Posicion inicial
-            model_state.pose.position.x = 0.244979
-            model_state.pose.position.y = -1.786919
-            model_state.pose.position.z = -0.001002
-            
+        model_state.pose.position.x = 0.244979
+        model_state.pose.position.y = -1.786919
+        model_state.pose.position.z = -0.001002
         self.set_position(model_state)
-
-        self.time_last_pose_saved = datetime.datetime.now() # reiniciamos o tempo de gardado de posicion para evitar que se garde a posicion onde se detecta reforzo
-
-    ## ENGADIR POSICIONS A COLA
-
-    def append_pos(self):
-
-        if self.valid_pos: # Xa existe algunha posicion miramos tempo transcurrido
-            time = datetime.datetime.now()
-            time_diff = time - self.time_last_pose_saved
-            if time_diff.seconds >= 10:
-                self.valid_pos.append(self.robot_position)
-                self.time_last_pose_saved = time
-        else: # se non existe posicion engadimos unha e gardamos o tempo actual
-            self.valid_pos.append(self.robot_position)
-            self.time_last_pose_saved = datetime.datetime.now()
-
-
-    ## DETER ROBOT
 
     def stop_robot(self):
         # print("No hay coincidencias, denetiendo robot\n")
@@ -267,8 +189,16 @@ class QLNode:
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
         node.velocity_publisher.publish(twist)
 
+    def append_states(self):
+        if self.image is not None:
+            self.stored_images.append(self.image)
+            self.state_action.append((self.linear_vel, self.angular_vel))
+            self.last_index_action = len(self.stored_images) - 1
+            print("salvados", len(self.stored_images))
+        self.number_states = len(self.stored_images)
+
     
-    ## GARDAR IMAXES EN DISCO
+
     def write_images(self):
 
         for archivo in os.listdir(self.folder):
@@ -289,81 +219,55 @@ class QLNode:
             img_data = pyexiv2.Image(filepath)
             metadata = img_data.read_exif()
             # Agregar metadato
-            metadata['Exif.Photo.UserComment'] = f"q_values={self.q_values[i]}"
+            metadata['Exif.Photo.UserComment'] = f"linear={self.state_action[i][0]}\nangular={self.state_action[i][1]}"
             img_data.modify_exif(metadata)
             
-    ## ENTRENAR
+    
     def train(self):
         self.load_images()
         self.bag = rosbag.Bag(self.bag_file, 'w')
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             if self.image is not None:
-                
-                self.current_state = self.find_closest_state() # encontrar estado actual
-                print("estado actual: ", self.current_state)
 
-                # first_frame = self.image
+                result = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
+                if(result == False):
+                    message = String()
+                    message.data = f"negative reinforcement detected in state {self.current_state}"
+                    self.reinforcement_publisher.publish(message)
+                    self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
+
+                    if self.last_index_action is not None: 
+                        del self.stored_images[self.last_index_action]
+                        del self.state_action[self.last_index_action]
+                       
+                    self.reset_position()
+
+                closest_velocity = self.find_closest_velocity()
             
-                if self.current_state is not None:
+                if closest_velocity is not None:
                     message = String()
                     message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
                     topic = f"/state_{str(self.current_state).zfill(2)}"
                     self.bag.write(topic, message, current_time)
-                    
-                    action = self.select_action() # seleccionar accion
 
-                    self.execute_action(action=action) # executar accion selecionada
-                    # print("accion: ", action)
+                    twist = Twist()
 
-                    message.data = f"action: {action},  state: {self.current_state}"
-                    topic = f"/action_{action}"
-                    self.bag.write(topic, message, current_time)
+                    twist.linear.x = closest_velocity[0]; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-                    self.last_action = action 
-                    
+                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = closest_velocity[1]
+
+                    self.velocity_publisher.publish(twist)
+
                     self.image = None
-
-                    while self.image is None:
-                        pass
-
-                    reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE) # obter recompensa
-
-                    # last_frame = self.image
-
-                    # distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
-
-                    new_state = self.find_closest_state() # obter o estado despois de executar a accion
-                    
-                    if new_state is None: # estado novo (crear)
-                        print(new_state)
-                        self.stop_robot() # eliminar no real
-                        self.append_states()
-                        new_state = self.find_closest_state()
-
-                    print("estado siguiente: ", new_state)
-                    
-                    
-                    self.update_q_values(reward, new_state) # actualizar q_values
-
-                    if reward == -1: # recompensa negativa
-                        message = String()
-                        now = datetime.datetime.now()
-                        message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
-                        self.reinforcement_publisher.publish(message)
-                        self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
-
-                        self.reset_position() # reiniciar a ultima posicion gardada
-                        
-                    else:
-                        self.append_pos() # engadir nova posicion a cola
-
-                    self.image = None # reiniciar a imaxe capturada para obligar a ter unha nova
-
                 else:
                     self.stop_robot()
 
-                    self.append_states() # crear novo estado
+                    random_action = self.random_action()
+
+                    self.execute_action(random_action)
+
+                    self.append_states()
 
                     self.image = None
 
@@ -375,22 +279,22 @@ if __name__ == '__main__':
         sys.exit()
     foldername = sys.argv[1]
 
-    node = QLNode(foldername)
+    node = RandomNode(foldername)
 
     def signal_handler(sig, frame):
         #print("Programa detenido")
-        node.write_images() # escribir imaxes en disco
+        node.write_images()
 
-        node.stop_robot() # parar robot
+        node.stop_robot()
 
-        node.bag.close() # cerrar ficheiro bag
+        node.bag.close()
 
         exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTSTP, signal_handler)
 
-    node.train() # executar entrenamento
+    node.train()
 
     node.stop_robot()
     
