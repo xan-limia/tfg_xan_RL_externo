@@ -25,8 +25,12 @@ from std_msgs.msg import String
 
 ACTIONS = 5
 
+# PIXELES
+
+N_PX = 60*80
+
 # THRESHOLDS
-TH_DIST_IMAGE = 300000
+TH_DIST_IMAGE = 650000  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
 TH_R_IMAGE = 0.8
 
 # AREA REFORZO
@@ -165,7 +169,7 @@ class QLNode:
         print(list_dist)
         list_dist = []
 
-        if min_dist > TH_DIST_IMAGE: # estado novo
+        if min_dist > TH_DIST_IMAGE: # estado novo  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
             return None
         else:
             return min_idx # detectamos estado actual
