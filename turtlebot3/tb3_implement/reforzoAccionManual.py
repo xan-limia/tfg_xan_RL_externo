@@ -223,7 +223,8 @@ class ManualNode:
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             if self.image is not None:
-
+                
+                ## Comentar esta parte par realizar probas sin reiniciar a posicion do robot
                 result = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
                 if(result == False):
                     message = String()
@@ -242,6 +243,8 @@ class ManualNode:
                     self.reset_position()
                     with open("distancia_reforzo.txt", "a") as archivo:
                         archivo.write(str(distance) + "\n")
+
+                #######################################################################
 
                 first_frame = self.image
                 closest_velocity = self.find_closest_velocity()
