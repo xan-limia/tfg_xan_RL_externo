@@ -22,7 +22,7 @@ def check_ref_in_images(img, x, y, w, h, threshold):
 if __name__ == '__main__':
     if len(sys.argv) < 2:
             print("Usando carpeta por defecto")
-            folder = "prueba2"
+            folder = "prueba_manual_aine_sin_mascara_1_correctas_separadas"
     else:
         folder = sys.argv[1]
     i = 0
@@ -32,9 +32,12 @@ if __name__ == '__main__':
             img = cv2.imread(os.path.join(folder, file))
 
             # Define la región que deseas resaltar
-            x = int(img.shape[1]/2) - 5 # coordenada x
-            y = int(img.shape[0]-15) # coordenada y
-            print(x, y)
+            # x = int(img.shape[1]/2) - 4 # coordenada x
+            # y = int(img.shape[0]-8) # coordenada y
+            # print(x, y)
+            x = 34
+            y = 52
+            print(img.shape)
             w = W # ancho del rectángulo
             h = H # altura del rectángulo
             threshold = THRESHOLD
