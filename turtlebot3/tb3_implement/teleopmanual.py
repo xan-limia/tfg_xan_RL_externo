@@ -1,105 +1,103 @@
 import rospy
 import rosbag
-import cv2
-import os, sys
+import cv2, numpy, pyexiv2
+import os, sys, signal
 import datetime
+import random
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Pose, Quaternion
+from gazebo_msgs.msg import ModelState, ModelStates
+from gazebo_msgs.srv import SetModelState
+from std_msgs.msg import String
+
+# Ctrl+C to quit
+
+# Posibles Accions
+# ---------------------------
+# 0 Xiro Esquerda Brusco
+# 1 Xiro Esquerda
+# 2 Avanzar Recto
+# 3 Xiro Dereita
+# 4 Xiro Dereita Brusco
 
 msg = """
-Control Your TurtleBot3!
+Posibles Accions 
 ---------------------------
-Moving around:
-        w
-   a         d
-        s
-
-w/x : increase/decrease linear velocity (Burger : ~ 0.22, Waffle and Waffle Pi : ~ 0.26)
-a/d : increase/decrease angular velocity (Burger : ~ 2.84, Waffle and Waffle Pi : ~ 1.82)
-
-space key : force stop
-
-q to quit
+1 Xiro Esquerda Brusco
+2 Xiro Esquerda
+3 Avanzar Recto
+4 Xiro Dereita
+5 Xiro Dereita Brusco
 """
 
-BURGER_MAX_LIN_VEL = 0.22
-BURGER_MAX_ANG_VEL = 2.84
+ACTIONS = 5
 
-WAFFLE_MAX_LIN_VEL = 0.26
-WAFFLE_MAX_ANG_VEL = 1.82
+# THRESHOLDS
+TH_DIST_IMAGE = 350000
+TH_R_IMAGE = 0.8
 
-LIN_VEL_STEP_SIZE = 0.01
-ANG_VEL_STEP_SIZE = 0.1
+# AREA REFORZO
+W = 8
+H = 6
+X = 36
+Y = 52
+
+# PARAMETROS ROBOT
+MODEL = 'turtlebot3_burger'
+TOPIC_VEL = '/cmd_vel'
+TOPIC_CAMERA = '/camera/image'
+TOPIC_MODEL_STATE = '/gazebo/model_states'
+TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
+TOPIC_REINFORCEMENT = '/reinforcement'
 
 
-class TeleoperationNode:
-    def __init__(self, filebagname):
-        rospy.init_node('teleoperation')
-        self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.image_subscriber = rospy.Subscriber('/camera/image', Image, self.image_callback)
-        self.turtlebot3_model = rospy.get_param("model", "burger")
+
+class ManualNode:
+    def __init__(self, foldername):
+
+        rospy.init_node('manualTeleop')
+        self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
+        self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)
+        self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
+        self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
+        self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
+
+
         self.bridge = CvBridge()
         cv2.namedWindow("window", 1) 
-        #self.rate = rospy.Rate(10)
-        self.velocities = []
+
         self.image = None
-        self.img_msg = None
-        self.bag_filename = os.path.join(os.getcwd(), filebagname)
+        self.robot_position = None
+
+        self.stored_images = []
+        self.state_action = []
+        self.last_index_action = None
+
+        self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+
+
+        self.folder = foldername
+
+        now = datetime.datetime.now()
+        bag_name = f"{self.folder}/{self.folder}_{now.strftime('%Y-%m-%d_%H-%M-%S-%f')}.bag"
+        self.bag_file = os.path.join(os.getcwd(), bag_name)
         self.bag = None
+
+        self.number_states = 0
+
+        self.linear_vel   = 0.0
+        self.angular_vel  = 0.0
+
         self.write = False
-
-        self.folder = filebagname.replace(".bag", "")
-
-        self.status = 0
-        self.target_linear_vel   = 0.0
-        self.target_angular_vel  = 0.0
-        self.control_linear_vel  = 0.0
-        self.control_angular_vel = 0.0
 
     def vels(self, target_linear_vel, target_angular_vel):
         return "currently:\tlinear vel %s\t angular vel %s " % (target_linear_vel,target_angular_vel)
     
-    def makeSimpleProfile(self, output, input, slop):
-        if input > output:
-            output = min( input, output + slop )
-        elif input < output:
-            output = max( input, output - slop )
-        else:
-            output = input
-
-        return output
-
-    def constrain(self, input, low, high):
-        if input < low:
-            input = low
-        elif input > high:
-            input = high
-        else:
-            input = input
-
-        return input
-
-    def checkLinearLimitVelocity(self, vel):
-        if self.turtlebot3_model == "burger":
-            vel = self.constrain(vel, -BURGER_MAX_LIN_VEL, BURGER_MAX_LIN_VEL)
-        elif self.turtlebot3_model == "waffle" or self.turtlebot3_model == "waffle_pi":
-            vel = self.constrain(vel, -WAFFLE_MAX_LIN_VEL, WAFFLE_MAX_LIN_VEL)
-        else:
-            vel = self.constrain(vel, -BURGER_MAX_LIN_VEL, BURGER_MAX_LIN_VEL)
-
-        return vel
+    def position_callback(self, msg):
+        robot_index = msg.name.index(MODEL)
+        self.robot_position = msg.pose[robot_index]
     
-    def checkAngularLimitVelocity(self, vel):
-        if self.turtlebot3_model == "burger":
-            vel = self.constrain(vel, -BURGER_MAX_ANG_VEL, BURGER_MAX_ANG_VEL)
-        elif self.turtlebot3_model == "waffle" or self.turtlebot3_model == "waffle_pi":
-            vel = self.constrain(vel, -WAFFLE_MAX_ANG_VEL, WAFFLE_MAX_ANG_VEL)
-        else:
-            vel = self.constrain(vel, -BURGER_MAX_ANG_VEL, BURGER_MAX_ANG_VEL)
-
-        return vel
-
     def image_callback(self, data):
         self.img_msg = data
         self.image = self.bridge.imgmsg_to_cv2(data, "bgr8")
@@ -107,40 +105,105 @@ class TeleoperationNode:
         cv2.imshow("window", img_resized)
         # cv2.imshow("window", self.image)
 
+    def stop_robot(self):
+        # print("No hay coincidencias, denetiendo robot\n")
+        twist = Twist()
+        twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
+        node.velocity_publisher.publish(twist)
+
+
+    def load_images(self):
+        if not os.path.exists(self.folder):
+            os.makedirs(self.folder)
+            return
+        for filename in os.listdir(self.folder):
+            if(filename.endswith('.png')):
+                img = cv2.imread(os.path.join(self.folder, filename))
+                # maskImg = self.mask_images(img)
+                # self.stored_images.append(maskImg)
+                self.stored_images.append(img) # Gardar imaxe sen mascara
+
+                img = pyexiv2.Image(os.path.join(self.folder, filename))
+                metadata = img.read_exif()
+                text = metadata['Exif.Photo.UserComment']               
+                linear_vel = float(text.split("=")[1].split("\n")[0])
+                angular_vel = float(text.split("=")[2])
+                self.state_action.append((linear_vel, angular_vel))
+        
+        self.number_states = len(self.stored_images)
+
+    def append_states(self):
+        if self.image is not None:
+            self.stored_images.append(self.image)
+            self.state_action.append((self.linear_vel, self.angular_vel))
+            self.last_index_action = len(self.stored_images) - 1
+            print("salvados", len(self.stored_images))
+        self.number_states = len(self.stored_images)
+        self.write = False
+
+
+    def write_images(self):
+
+        for archivo in os.listdir(self.folder):
+            ruta_archivo = os.path.join(self.folder, archivo)
+            if ruta_archivo.endswith(".bag"):
+                pass
+            else:
+                os.remove(ruta_archivo)
+
+        
+        for i, img in enumerate(self.stored_images):
+            now = datetime.datetime.now()
+            filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S-%f')}.png"
+            filepath = os.path.join(os.getcwd(), filename)
+            self.lastSavedFilename = filepath
+            cv2.imwrite(filepath, img)
+            # Leer imagen
+            img_data = pyexiv2.Image(filepath)
+            metadata = img_data.read_exif()
+            # Agregar metadato
+            metadata['Exif.Photo.UserComment'] = f"linear={self.state_action[i][0]}\nangular={self.state_action[i][1]}"
+            img_data.modify_exif(metadata)
 
     def teleop(self):
-        self.bag = rosbag.Bag(self.bag_filename, 'w')
+        self.load_images()
+        self.bag = rosbag.Bag(self.bag_file, 'w')
         print(msg)
         while not rospy.is_shutdown():
-            
+            current_time = rospy.Time.now()
             key = cv2.waitKey(1) & 0xff
-            if key == ord('w'):
-                self.target_linear_vel = self.checkLinearLimitVelocity(self.target_linear_vel + LIN_VEL_STEP_SIZE)
-                self.status = self.status + 1
+            if key == ord('1'):
+                self.angular_vel = 0.90
+                self.linear_vel = 0.15
                 self.write = True
-                print(self.vels(self.target_linear_vel,self.target_angular_vel))
-            elif key == ord('s'):
-                self.target_linear_vel = self.checkLinearLimitVelocity(self.target_linear_vel - LIN_VEL_STEP_SIZE)
-                self.fstatus = self.status + 1
+                action = 1
+                
+            elif key == ord('2'):
+                self.angular_vel = 0.54
+                self.linear_vel = 0.15
                 self.write = True
-                print(self.vels(self.target_linear_vel,self.target_angular_vel))
-            elif key == ord('a'):
-                self.target_angular_vel = self.checkAngularLimitVelocity(self.target_angular_vel + ANG_VEL_STEP_SIZE)
-                self.status = self.status + 1
+                action = 2
+                
+            elif key == ord('3'):
+                self.angular_vel = 0.00
+                self.linear_vel = 0.15
                 self.write = True
-                print(self.vels(self.target_linear_vel,self.target_angular_vel))
-            elif key == ord('d'):
-                self.target_angular_vel = self.checkAngularLimitVelocity(self.target_angular_vel - ANG_VEL_STEP_SIZE)
-                self.status = self.status + 1
+                action = 3
+                
+            elif key == ord('4'):
+                self.angular_vel = -0.54
+                self.linear_vel = 0.15
                 self.write = True
-                print(self.vels(self.target_linear_vel,self.target_angular_vel))
-            elif key == ord(' '):
-                self.target_linear_vel   = 0.0
-                self.control_linear_vel  = 0.0
-                self.target_angular_vel  = 0.0
-                self.control_angular_vel = 0.0
-                print(self.vels(self.target_linear_vel, self.target_angular_vel))
-            
+                action = 4
+               
+            elif key == ord('5'):
+                self.angular_vel = -0.90
+                self.linear_vel = 0.15
+                self.write = True
+                action = 5
+                
+        
             if key == ord('q'):
                 break
 
@@ -148,52 +211,55 @@ class TeleoperationNode:
                 cv2.destroyWindow('window')
                 cv2.namedWindow("window", 1) 
 
-
-            if self.status == 20 :
-                print(msg)
-                self.status = 0
-
             twist = Twist()
 
-            self.control_linear_vel = self.makeSimpleProfile(self.control_linear_vel, self.target_linear_vel, (LIN_VEL_STEP_SIZE/2.0))
-            twist.linear.x = self.control_linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+            twist.linear.x = self.linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-            self.control_angular_vel = self.makeSimpleProfile(self.control_angular_vel, self.target_angular_vel, (ANG_VEL_STEP_SIZE/2.0))
-            twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.control_angular_vel
+            twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
 
-            self.velocities.append(twist)
             self.velocity_publisher.publish(twist)
-
+        
+            
             if self.write:
-                current_time = rospy.Time.now()
-                if len(self.velocities) > 0 and self.image is not None:
-                    now = datetime.datetime.now()
-                    print(now)
-                    if not os.path.exists(self.folder):
-                        os.makedirs(self.folder)
-                    filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S')}.jpg"
-                    filepath = os.path.join(os.getcwd(), filename)
-                    cv2.imwrite(filepath, self.image)
-                    self.bag.write('/image', self.img_msg, current_time)
-                    self.bag.write('/velocities', self.velocities[-1], current_time)
-                self.img_msg = None
-                self.image = None
-                self.velocities = []
-                self.write = False
+                message = String()
+                message.data = f"action: {action}"
+                topic = f"/action_{action}"
+                self.bag.write(topic, message, current_time)
+                self.append_states()
+
+            self.image = None
+
+
 
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print("Debe ingresar el nombre del archivo bag")
+        print("Debe ingresar el nombre de la carpeta a utilizar")
         sys.exit()
-    filebagname = sys.argv[1]
+    foldername = sys.argv[1]
 
-    node = TeleoperationNode(filebagname)
+    node = ManualNode(foldername)
+
+    def signal_handler(sig, frame):
+        #print("Programa detenido")
+        node.write_images()
+
+        node.stop_robot()
+    
+        node.bag.close()
+
+        exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTSTP, signal_handler)
+
     node.teleop()
 
-    twist = Twist()
-    twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
-    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
-    node.velocity_publisher.publish(twist)
-    node.bag.close()
+    node.stop_robot()
+
+
+
+
+
+
