@@ -34,7 +34,7 @@ Posibles Accions
 ACTIONS = 5
 
 # THRESHOLDS
-TH_DIST_IMAGE = 650000
+TH_DIST_IMAGE = 200000
 TH_R_IMAGE = 0.8
 
 # AREA REFORZO
@@ -225,24 +225,24 @@ class ManualNode:
             if self.image is not None:
                 
                 ## Comentar esta parte par realizar probas sin reiniciar a posicion do robot
-                result = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
-                if(result == False):
-                    message = String()
-                    message.data = f"negative reinforcement detected in state {self.current_state}"
-                    self.reinforcement_publisher.publish(message)
-                    self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
+                # result = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE)
+                # if(result == False):
+                #     message = String()
+                #     message.data = f"negative reinforcement detected in state {self.current_state}"
+                #     self.reinforcement_publisher.publish(message)
+                #     self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
 
-                    if self.last_index_action is not None: 
-                        del self.stored_images[self.last_index_action]
-                        del self.state_action[self.last_index_action]
+                #     if self.last_index_action is not None: 
+                #         del self.stored_images[self.last_index_action]
+                #         del self.state_action[self.last_index_action]
 
-                    last_frame = self.image
+                #     last_frame = self.image
 
-                    distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
+                #     distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
 
-                    self.reset_position()
-                    with open("distancia_reforzo.txt", "a") as archivo:
-                        archivo.write(str(distance) + "\n")
+                #     self.reset_position()
+                #     with open("distancia_reforzo.txt", "a") as archivo:
+                #         archivo.write(str(distance) + "\n")
 
                 #######################################################################
 
@@ -271,19 +271,16 @@ class ManualNode:
                     if key.lower() == '1':
                         self.angular_vel = 0.90
                         self.linear_vel = 0.15
-                        self.write = True
                         print(self.vels(self.linear_vel,self.angular_vel))
                         action = 1
                     elif key.lower() == '2':
                         self.angular_vel = 0.54
                         self.linear_vel = 0.15
-                        self.write = True
                         action = 2
                         print(self.vels(self.linear_vel,self.angular_vel))
                     elif key.lower() == '3':
                         self.angular_vel = 0.00
                         self.linear_vel = 0.15
-                        self.write = True
                         action = 3
                         print(self.vels(self.linear_vel,self.angular_vel))
                     elif key.lower() == '4':
@@ -295,7 +292,6 @@ class ManualNode:
                     elif key.lower() == '5':
                         self.angular_vel = -0.90
                         self.linear_vel = 0.15
-                        self.write = True
                         action = 5
                         print(self.vels(self.linear_vel,self.angular_vel))
 
@@ -311,10 +307,10 @@ class ManualNode:
                     message.data = f"action: {action}"
                     topic = f"/action_{action}"
                     self.bag.write(topic, message, current_time)
+                    
+                    self.append_states()
 
-
-                    if self.write:
-                        self.append_states()
+                    self.image = None
 
                     
 

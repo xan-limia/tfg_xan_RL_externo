@@ -31,7 +31,8 @@ N_PX = 60*80
 
 # THRESHOLDS
 TH_DIST_IMAGE = 650000  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
-TH_R_IMAGE = 0.8
+# TH_DIST_IMAGE = 150
+TH_R_IMAGE = 0.5
 
 # AREA REFORZO
 W = 8
@@ -140,8 +141,10 @@ class QLNode:
         region = img_binaria[y:y+h, x:x+w]
 
         black_region = numpy.zeros((h, w), dtype=numpy.uint8)
-
         coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
+
+        # white_region = numpy.ones((h, w), dtype=numpy.uint8)
+        # coincidences = cv2.compare(region, white_region, cv2.CMP_EQ)
 
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
         # print(percentage)
@@ -242,6 +245,10 @@ class QLNode:
             model_state.pose.position.x = 0.244979
             model_state.pose.position.y = -1.786919
             model_state.pose.position.z = -0.001002
+
+            # model_state.pose.position.x = 0.244508
+            # model_state.pose.position.y = -1.631067
+            # model_state.pose.position.z = -0.001002
             
         self.set_position(model_state)
 

@@ -123,9 +123,11 @@ class RandomNode:
         umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
         region = img_binaria[y:y+h, x:x+w]
 
-        black_region = numpy.zeros((h, w), dtype=numpy.uint8)
+        # black_region = numpy.zeros((h, w), dtype=numpy.uint8)
+        # coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
 
-        coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
+        white_region = numpy.ones((h, w), dtype=numpy.uint8)
+        coincidences = cv2.compare(region, white_region, cv2.CMP_EQ)
 
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
         #print(percentage)
@@ -180,6 +182,9 @@ class RandomNode:
         model_state.pose.position.x = 0.244979
         model_state.pose.position.y = -1.786919
         model_state.pose.position.z = -0.001002
+        # model_state.pose.position.x = 0.244508
+        # model_state.pose.position.y = -1.631067
+        # model_state.pose.position.z = -0.001002 
         self.set_position(model_state)
 
     def stop_robot(self):
