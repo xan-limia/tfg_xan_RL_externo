@@ -1,7 +1,11 @@
 import rospy
 import rosbag
 import cv2, numpy, pyexiv2
-import os, sys, signal
+import os, sys, signal, select
+if os.name == 'nt':
+  import msvcrt, time
+else:
+  import tty, termios
 import datetime
 import random
 from sensor_msgs.msg import Image
@@ -32,6 +36,8 @@ Posibles Accions
 """
 
 ACTIONS = 5
+
+VELOCITY_FACTOR = 1/3
 
 # THRESHOLDS
 TH_DIST_IMAGE = 350000
@@ -91,6 +97,29 @@ class ManualNode:
 
         self.write = False
 
+    def getKey(self):
+        if os.name == 'nt':
+            timeout = 0.1
+            startTime = time.time()
+            while(1):
+                if msvcrt.kbhit():
+                    if sys.version_info[0] >= 3:
+                        return msvcrt.getch().decode()
+                    else:
+                        return msvcrt.getch()
+                elif time.time() - startTime > timeout:
+                    return ''
+
+        tty.setraw(sys.stdin.fileno())
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+        if rlist:
+            key = sys.stdin.read(1)
+        else:
+            key = ''
+
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+        return key
+
     def vels(self, target_linear_vel, target_angular_vel):
         return "currently:\tlinear vel %s\t angular vel %s " % (target_linear_vel,target_angular_vel)
     
@@ -99,11 +128,9 @@ class ManualNode:
         self.robot_position = msg.pose[robot_index]
     
     def image_callback(self, data):
-        self.img_msg = data
-        self.image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        img_resized = cv2.resize(self.image, (0, 0), fx=4, fy=4)
-        cv2.imshow("window", img_resized)
-        # cv2.imshow("window", self.image)
+        image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        # self.image = self.mask_images(image_bridge)
+        self.image = image_bridge ## Descomentar para executar sen mascara
 
     def stop_robot(self):
         # print("No hay coincidencias, denetiendo robot\n")
@@ -172,50 +199,64 @@ class ManualNode:
         print(msg)
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
-            key = cv2.waitKey(1) & 0xff
-            if key == ord('1'):
+            # key = cv2.waitKey(1) & 0xff
+            # if key == ord('1'):
+            key = self.getKey()
+            if key == '1':
                 self.angular_vel = 0.90
                 self.linear_vel = 0.15
                 self.write = True
                 action = 1
                 
-            elif key == ord('2'):
+            # elif key == ord('2'):
+            elif key == '2':
                 self.angular_vel = 0.54
                 self.linear_vel = 0.15
                 self.write = True
                 action = 2
                 
-            elif key == ord('3'):
+            # elif key == ord('3'):
+            elif key == '3':
                 self.angular_vel = 0.00
                 self.linear_vel = 0.15
                 self.write = True
                 action = 3
                 
-            elif key == ord('4'):
+            # elif key == ord('4'):
+            elif key == '4':
                 self.angular_vel = -0.54
                 self.linear_vel = 0.15
                 self.write = True
                 action = 4
                
-            elif key == ord('5'):
+            # elif key == ord('5'):
+            elif key == '5':
                 self.angular_vel = -0.90
                 self.linear_vel = 0.15
                 self.write = True
                 action = 5
+            else:
+                if (key == '\x03'):
+                    node.write_images()
+
+                    node.stop_robot()
+    
+                    node.bag.close()
+                    break
                 
         
-            if key == ord('q'):
-                break
+            # if key == ord('q'):
+            #     break
 
-            if key == ord('r'):
-                cv2.destroyWindow('window')
-                cv2.namedWindow("window", 1) 
+            # if key == ord('r'):
+            #     cv2.destroyWindow('window')
+            #     cv2.namedWindow("window", 1) 
 
             twist = Twist()
 
-            twist.linear.x = self.linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+            twist.linear.x = self.linear_vel * VELOCITY_FACTOR; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-            twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
+            twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel * VELOCITY_FACTOR
 
             self.velocity_publisher.publish(twist)
         
@@ -226,8 +267,9 @@ class ManualNode:
                 topic = f"/action_{action}"
                 self.bag.write(topic, message, current_time)
                 self.append_states()
+                self.image = None
 
-            self.image = None
+            
 
 
 
@@ -239,24 +281,30 @@ if __name__ == '__main__':
         sys.exit()
     foldername = sys.argv[1]
 
+    if os.name != 'nt':
+        settings = termios.tcgetattr(sys.stdin)
+
     node = ManualNode(foldername)
 
-    def signal_handler(sig, frame):
-        #print("Programa detenido")
-        node.write_images()
+    # def signal_handler(sig, frame):
+    #     #print("Programa detenido")
+    #     node.write_images()
 
-        node.stop_robot()
+    #     node.stop_robot()
     
-        node.bag.close()
+    #     node.bag.close()
 
-        exit(0)
+    #     exit(0)
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTSTP, signal_handler)
+    # signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGTSTP, signal_handler)
 
     node.teleop()
 
     node.stop_robot()
+
+    if os.name != 'nt':
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
 
 
 
