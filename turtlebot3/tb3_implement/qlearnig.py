@@ -15,30 +15,60 @@ from std_msgs.msg import String
 
 # Ctrl+C to quit
 
-# Posibles Accions
-# ---------------------------
-# 0 Xiro Esquerda Brusco
-# 1 Xiro Esquerda
-# 2 Avanzar Recto
-# 3 Xiro Dereita
-# 4 Xiro Dereita Brusco
+msg = """
+Posibles Accions 
+---------------------------
+1 Xiro Esquerda Mais Brusco
+2 Xiro Esquerda Brusco
+3 Xiro Esquerda Suave
+4 Avanzar Recto
+5 Xiro Dereita Suave
+6 Xiro Dereita Brusco
+7 Xiro Dereita Mais Brusco
+"""
 
-ACTIONS = 5
+ACTIONS = 7
+
+# msg = """
+# Posibles Accions 
+# ---------------------------
+# 1 Xiro Esquerda Brusco
+# 2 Xiro Esquerda Suave
+# 3 Avanzar Recto
+# 4 Xiro Dereita Suave
+# 5 Xiro Dereita Brusco
+# """
+
+# ACTIONS = 5
+
+VELOCITY_FACTOR = 1
 
 # PIXELES
 
 N_PX = 60*80
 
 # THRESHOLDS
-TH_DIST_IMAGE = 650000  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
+TH_DIST_IMAGE = 200000  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
 # TH_DIST_IMAGE = 150
-TH_R_IMAGE = 0.5
+TH_R_IMAGE = 0.0000000000001
 
 # AREA REFORZO
-W = 8
-H = 6
-X = 36
-Y = 52
+# W = 8
+# H = 6
+# X = 36
+# Y = 52
+
+# AREA REFORZO
+W = 48
+H = 12
+X = 16
+Y = 47
+
+# AREA REFORZO
+# W = 56
+# H = 12
+# X = 0
+# Y = 47
 
 # POLITICAE-GREEDY
 EPSILON = 0.00
@@ -69,13 +99,15 @@ class QLNode:
         cv2.namedWindow("window", 1) 
 
         self.image = None
+        self.img_msg = None
         self.robot_position = None
 
         self.stored_images = []
         self.q_values = []
         self.valid_pos = deque(maxlen=10)
 
-        self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+        # self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+        self.actions = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
 
         self.stored_velocities = []
         self.number_states = 0
@@ -102,14 +134,29 @@ class QLNode:
     # IMAXES
 
     def image_callback(self, data):
+        self.img_msg = data
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        self.image = self.mask_images(image_bridge)
-        # self.image = image_bridge ## Descomentar para executar sen mascara
+        # self.image = self.mask_images(image_bridge)
+        self.image = image_bridge ## Descomentar para executar sen mascara
 
     def mask_images(self, img):
         h, w = img.shape[:2]
-        maskImg = numpy.zeros_like(img)
-        maskImg[int(h / 3):] = img[int(h / 3):]
+        # mascara 1, tercio superior
+        # maskImg = numpy.zeros((h - int(h/3), w))
+        # maskImg= img[int(h / 3):]
+
+        # mascara 2, tercio superior, tercio dereito
+        # maskImg = numpy.zeros((h - int(h/3), w - int(w/3)))
+        # maskImg= img[int(h / 3):, :w - int(w/3)]
+
+        # mascara 3, tercio superior, quinto esquerda, quinto dereita
+        maskImg = numpy.zeros((h - int(h/3), w - int(w/5)*2))
+        maskImg = img[int(h / 3):, int(w/5):w - int(w/5)]
+
+        # mascara 4, tercio superior, quinto dereita
+        # maskImg = numpy.zeros((h - int(h/3), w - int(w/5)))
+        # maskImg = img[int(h / 3):, :w - int(w/5)]
+
         return maskImg
     
     def load_images(self):
@@ -119,9 +166,9 @@ class QLNode:
         for filename in os.listdir(self.folder):
             if(filename.endswith('.png')):
                 img = cv2.imread(os.path.join(self.folder, filename))
-                maskImg = self.mask_images(img)
-                self.stored_images.append(maskImg)
-                # self.stored_images.append(img) # Gardar imaxe sen mascara
+                # maskImg = self.mask_images(img)
+                # self.stored_images.append(maskImg)
+                self.stored_images.append(img) # Gardar imaxe sen mascara
 
                 img = pyexiv2.Image(os.path.join(self.folder, filename)) # ler a imaxe con pyexiv para acceder os metadatos
                 metadata = img.read_exif() # ler metadato
@@ -140,11 +187,11 @@ class QLNode:
         umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
         region = img_binaria[y:y+h, x:x+w]
 
-        black_region = numpy.zeros((h, w), dtype=numpy.uint8)
-        coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
+        # black_region = numpy.zeros((h, w), dtype=numpy.uint8)
+        # coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
 
-        # white_region = numpy.ones((h, w), dtype=numpy.uint8)
-        # coincidences = cv2.compare(region, white_region, cv2.CMP_EQ)
+        white_region = numpy.ones((h, w), dtype=numpy.uint8) * 255
+        coincidences = cv2.compare(region, white_region, cv2.CMP_EQ)
 
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
         # print(percentage)
@@ -162,8 +209,11 @@ class QLNode:
             return None
         min_dist = float('inf')
         min_idx = -1
+        # maskImg = self.image
+        maskImg = self.mask_images(self.image)
         for i, img in enumerate(self.stored_images):
-            distance = numpy.sum((cv2.absdiff(self.image.flatten(), img.flatten()) ** 2))
+            mimg = self.mask_images(img=img)
+            distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2))
             list_dist.append([distance, i])
             if distance < min_dist:
                 min_dist = distance
@@ -204,8 +254,8 @@ class QLNode:
     
     def execute_action(self, action):
     
-        self.linear_vel = self.actions[action][0]
-        self.angular_vel = self.actions[action][1]
+        self.linear_vel = self.actions[action][0] * VELOCITY_FACTOR
+        self.angular_vel = self.actions[action][1] * VELOCITY_FACTOR
 
         twist = Twist()
 
@@ -242,12 +292,16 @@ class QLNode:
             model_state.pose = last_pos
             self.valid_pos.pop()
         else: # Posicion inicial
-            model_state.pose.position.x = 0.244979
-            model_state.pose.position.y = -1.786919
+            # model_state.pose.position.x = 0.244979
+            # model_state.pose.position.y = -1.786919
+            # model_state.pose.position.z = -0.001002
+
+            model_state.pose.position.x = 0.244508
+            model_state.pose.position.y = -1.631067
             model_state.pose.position.z = -0.001002
 
             # model_state.pose.position.x = 0.244508
-            # model_state.pose.position.y = -1.631067
+            # model_state.pose.position.y = -1.704041
             # model_state.pose.position.z = -0.001002
             
         self.set_position(model_state)
@@ -375,6 +429,9 @@ class QLNode:
                     self.stop_robot()
 
                     self.append_states() # crear novo estado
+
+                    topic = "/images"
+                    self.bag.write(topic, self.img_msg, current_time)
 
                     self.image = None
 

@@ -13,24 +13,49 @@ from std_msgs.msg import String
 
 # Ctrl+C to quit
 
-# Posibles Accions
-# ---------------------------
-# 0 Xiro Esquerda Brusco
-# 1 Xiro Esquerda
-# 2 Avanzar Recto
-# 3 Xiro Dereita
-# 4 Xiro Dereita Brusco
+msg = """
+Posibles Accions 
+---------------------------
+1 Xiro Esquerda Mais Brusco
+2 Xiro Esquerda Brusco
+3 Xiro Esquerda Suave
+4 Avanzar Recto
+5 Xiro Dereita Suave
+6 Xiro Dereita Brusco
+7 Xiro Dereita Mais Brusco
+"""
 
-ACTIONS = 5
+ACTIONS = 7
+
+# msg = """
+# Posibles Accions 
+# ---------------------------
+# 1 Xiro Esquerda Brusco
+# 2 Xiro Esquerda Suave
+# 3 Avanzar Recto
+# 4 Xiro Dereita Suave
+# 5 Xiro Dereita Brusco
+# """
+
+# ACTIONS = 5
+
+VELOCITY_FACTOR = 1
 
 # THRESHOLDS
-TH_DIST_IMAGE = 600000
-TH_R_IMAGE = 0.8
+TH_DIST_IMAGE = 70000
+# TH_R_IMAGE = 0.8
+TH_R_IMAGE = 0.08
 
 # AREA REFORZO
-W = 8
+# W = 8
+# H = 6
+# X = 36
+# Y = 52
+
+# AREA REFORZO
+W = 48
 H = 6
-X = 36
+X = 16
 Y = 52
 
 # PARAMETROS ROBOT
@@ -56,13 +81,16 @@ class RandomNode:
         cv2.namedWindow("window", 1) 
 
         self.image = None
+        self.img_msg = None
         self.robot_position = None
 
         self.stored_images = []
         self.state_action = []
         self.last_index_action = None
 
-        self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+        
+        # self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+        self.actions = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
 
 
         self.folder = foldername
@@ -86,14 +114,17 @@ class RandomNode:
         self.robot_position = msg.pose[robot_index]
 
     def image_callback(self, data):
+        self.img_msg = data
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        self.image = self.mask_images(image_bridge)
-        # self.image = image_bridge ## Descomentar para executar sen mascara
+        # self.image = self.mask_images(image_bridge)
+        self.image = image_bridge ## Descomentar para executar sen mascara
 
     def mask_images(self, img):
         h, w = img.shape[:2]
-        maskImg = numpy.zeros_like(img)
-        maskImg[int(h / 3):] = img[int(h / 3):]
+        # maskImg = numpy.zeros((h - int(h/3), w))
+        # maskImg= img[int(h / 3):]
+        maskImg = numpy.zeros((h - int(h/3), w - int(w/5)*2))
+        maskImg = img[int(h / 3):, int(w/5):w - int(w/5)]
         return maskImg
     
     def load_images(self):
@@ -103,9 +134,9 @@ class RandomNode:
         for filename in os.listdir(self.folder):
             if(filename.endswith('.png')):
                 img = cv2.imread(os.path.join(self.folder, filename))
-                maskImg = self.mask_images(img)
-                self.stored_images.append(maskImg)
-                # self.stored_images.append(img) # Gardar imaxe sen mascara
+                # maskImg = self.mask_images(img)
+                # self.stored_images.append(maskImg)
+                self.stored_images.append(img) # Gardar imaxe sen mascara
 
                 img = pyexiv2.Image(os.path.join(self.folder, filename))
                 metadata = img.read_exif()
@@ -123,10 +154,10 @@ class RandomNode:
         umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
         region = img_binaria[y:y+h, x:x+w]
 
-        # black_region = numpy.zeros((h, w), dtype=numpy.uint8)
+        # black_region = numpy.zeros((h, w), dtype=numpy.uint8) 
         # coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
 
-        white_region = numpy.ones((h, w), dtype=numpy.uint8)
+        white_region = numpy.ones((h, w), dtype=numpy.uint8) * 255
         coincidences = cv2.compare(region, white_region, cv2.CMP_EQ)
 
         percentage = numpy.count_nonzero(coincidences) / coincidences.size
@@ -142,8 +173,11 @@ class RandomNode:
             return None
         min_dist = float('inf')
         min_idx = -1
+        # maskImg = self.image
+        maskImg = self.mask_images(self.image)
         for i, img in enumerate(self.stored_images):
-            distance = numpy.sum((cv2.absdiff(self.image.flatten(), img.flatten()) ** 2))
+            img = self.mask_images(img=img)
+            distance = numpy.sum((cv2.absdiff(maskImg.flatten(), img.flatten()) ** 2))
             list_dist.append([distance, i])
             if distance < min_dist:
                 min_dist = distance
@@ -165,8 +199,8 @@ class RandomNode:
     
     def execute_action(self, action):
     
-        self.linear_vel = self.actions[action][0]
-        self.angular_vel = self.actions[action][1]
+        self.linear_vel = self.actions[action][0] * VELOCITY_FACTOR
+        self.angular_vel = self.actions[action][1] * VELOCITY_FACTOR
 
         twist = Twist()
 
@@ -179,12 +213,15 @@ class RandomNode:
     def reset_position(self):
         model_state = ModelState()
         model_state.model_name = MODEL 
-        model_state.pose.position.x = 0.244979
-        model_state.pose.position.y = -1.786919
-        model_state.pose.position.z = -0.001002
+        # model_state.pose.position.x = 0.244979
+        # model_state.pose.position.y = -1.786919
+        # model_state.pose.position.z = -0.001002
         # model_state.pose.position.x = 0.244508
         # model_state.pose.position.y = -1.631067
-        # model_state.pose.position.z = -0.001002 
+        # model_state.pose.position.z = -0.001002
+        model_state.pose.position.x = 0.244508
+        model_state.pose.position.y = -1.704041
+        model_state.pose.position.z = -0.001002  
         self.set_position(model_state)
 
     def stop_robot(self):
@@ -258,9 +295,9 @@ class RandomNode:
 
                     twist = Twist()
 
-                    twist.linear.x = closest_velocity[0]; twist.linear.y = 0.0; twist.linear.z = 0.0
+                    twist.linear.x = closest_velocity[0] * VELOCITY_FACTOR; twist.linear.y = 0.0; twist.linear.z = 0.0
 
-                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = closest_velocity[1]
+                    twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = closest_velocity[1] * VELOCITY_FACTOR
 
                     self.velocity_publisher.publish(twist)
 
@@ -273,6 +310,9 @@ class RandomNode:
                     self.execute_action(random_action)
 
                     self.append_states()
+
+                    topic = "/images"
+                    self.bag.write(topic, self.img_msg, current_time)
 
                     self.image = None
 
