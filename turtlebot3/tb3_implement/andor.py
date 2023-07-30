@@ -35,7 +35,7 @@ def calcular_and_or(imagenes, flag):
         return resultado_and
 
     
-directorio = 'prueba_manual_jose_sin_mascara_1_correctas_separadas/-0.9'
+directorio = 'prueba_siguelinea_manual_3_separadas'
 #directorio = 'prueba_manual_1'
 
 imagenes = cargar_imagenes(directorio)
@@ -50,14 +50,21 @@ y = 52
 w = W 
 h = H
 
-cv2.rectangle(resultado, (x, y), (x + w, y + h), (0, 0, 255), 1)
+#cv2.rectangle(resultado, (x, y), (x + w, y + h), (0, 0, 255), 1)
+
+img_gris = cv2.cvtColor(imagen_redimensionada, cv2.COLOR_BGR2GRAY)
+umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
+cv2.imshow("Black&White", img_binaria)
+
+
+print(resultado)
 
 cv2.imshow("OR", imagen_redimensionada)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
-nome_imaxe_or = 'or_-0.9.png'
-directorio_resultado = 'prueba_manual_jose_sin_mascara_1_correctas_separadas'
+nome_imaxe_or = 'or.png'
+directorio_resultado = 'prueba_siguelinea_manual_3_separadas'
 
 cv2.imwrite(os.path.join(directorio_resultado, nome_imaxe_or), resultado)
 

@@ -17,25 +17,31 @@ from std_msgs.msg import String
 
 # Ctrl+C to quit
 
-# Posibles Accions
-# ---------------------------
-# 0 Xiro Esquerda Brusco
-# 1 Xiro Esquerda
-# 2 Avanzar Recto
-# 3 Xiro Dereita
-# 4 Xiro Dereita Brusco
-
 msg = """
 Posibles Accions 
 ---------------------------
-1 Xiro Esquerda Brusco
-2 Xiro Esquerda
-3 Avanzar Recto
-4 Xiro Dereita
-5 Xiro Dereita Brusco
+1 Xiro Esquerda Mais Brusco
+2 Xiro Esquerda Brusco
+3 Xiro Esquerda Suave
+4 Avanzar Recto
+5 Xiro Dereita Suave
+6 Xiro Dereita Brusco
+7 Xiro Dereita Mais Brusco
 """
 
-ACTIONS = 5
+ACTIONS = 7
+
+# msg = """
+# Posibles Accions 
+# ---------------------------
+# 1 Xiro Esquerda Brusco
+# 2 Xiro Esquerda Suave
+# 3 Avanzar Recto
+# 4 Xiro Dereita Suave
+# 5 Xiro Dereita Brusco
+# """
+
+# ACTIONS = 5
 
 VELOCITY_FACTOR = 1/3
 
@@ -74,6 +80,7 @@ class ManualNode:
         cv2.namedWindow("window", 1) 
 
         self.image = None
+        self.img_msg = None
         self.robot_position = None
 
         self.stored_images = []
@@ -81,6 +88,7 @@ class ManualNode:
         self.last_index_action = None
 
         self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+        self.actions = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
 
 
         self.folder = foldername
@@ -128,6 +136,7 @@ class ManualNode:
         self.robot_position = msg.pose[robot_index]
     
     def image_callback(self, data):
+        self.img_msg = data
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
         # self.image = self.mask_images(image_bridge)
         self.image = image_bridge ## Descomentar para executar sen mascara
@@ -169,6 +178,19 @@ class ManualNode:
         self.number_states = len(self.stored_images)
         self.write = False
 
+    def execute_action(self, action):
+    
+        self.linear_vel = self.actions[action][0] * VELOCITY_FACTOR
+        self.angular_vel = self.actions[action][1] * VELOCITY_FACTOR
+
+        twist = Twist()
+
+        twist.linear.x = self.linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
+
+        self.velocity_publisher.publish(twist)
+
 
     def write_images(self):
 
@@ -199,58 +221,42 @@ class ManualNode:
         print(msg)
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
-            # key = cv2.waitKey(1) & 0xff
-            # if key == ord('1'):
             key = self.getKey()
             if key == '1':
-                self.angular_vel = 0.90
-                self.linear_vel = 0.15
+                action = 0
+                self.execute_action(action=action)
                 self.write = True
-                action = 1
-                
-            # elif key == ord('2'):
             elif key == '2':
-                self.angular_vel = 0.54
-                self.linear_vel = 0.15
-                self.write = True
-                action = 2
-                
-            # elif key == ord('3'):
+                action = 1
+                self.execute_action(action=action)
+                self.write = True            
             elif key == '3':
-                self.angular_vel = 0.00
-                self.linear_vel = 0.15
+                action = 2
+                self.execute_action(action=action)
                 self.write = True
-                action = 3
-                
-            # elif key == ord('4'):
             elif key == '4':
-                self.angular_vel = -0.54
-                self.linear_vel = 0.15
+                action = 3
+                self.execute_action(action=action)
                 self.write = True
-                action = 4
-               
-            # elif key == ord('5'):
             elif key == '5':
-                self.angular_vel = -0.90
-                self.linear_vel = 0.15
+                action = 4
+                self.execute_action(action=action)
                 self.write = True
+            elif key == '6':
                 action = 5
+                self.execute_action(action=action)
+                self.write = True
+            elif key == '7':
+                action = 6
+                self.execute_action(action=action)
+                self.write = True
             else:
-                if (key == '\x03'):
-                    node.write_images()
+                if key == 'q':
 
                     node.stop_robot()
-    
+                    node.write_images() 
                     node.bag.close()
                     break
-                
-        
-            # if key == ord('q'):
-            #     break
-
-            # if key == ord('r'):
-            #     cv2.destroyWindow('window')
-            #     cv2.namedWindow("window", 1) 
 
             twist = Twist()
 
@@ -266,6 +272,8 @@ class ManualNode:
                 message.data = f"action: {action}"
                 topic = f"/action_{action}"
                 self.bag.write(topic, message, current_time)
+                topic = "/images"
+                self.bag.write(topic, self.img_msg, current_time)
                 self.append_states()
                 self.image = None
 
@@ -286,18 +294,19 @@ if __name__ == '__main__':
 
     node = ManualNode(foldername)
 
-    # def signal_handler(sig, frame):
-    #     #print("Programa detenido")
-    #     node.write_images()
-
-    #     node.stop_robot()
+    def signal_handler(sig, frame):
+        #print("Programa detenido")
+        node.stop_robot()
     
-    #     node.bag.close()
+        node.write_images()
 
-    #     exit(0)
+        
+        node.bag.close()
 
-    # signal.signal(signal.SIGINT, signal_handler)
-    # signal.signal(signal.SIGTSTP, signal_handler)
+        exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTSTP, signal_handler)
 
     node.teleop()
 

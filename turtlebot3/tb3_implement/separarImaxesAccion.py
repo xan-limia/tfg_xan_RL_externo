@@ -31,7 +31,7 @@ def organizar_archivos(directorio_orig, directorio_dest):
             carpeta_destino = crear_carpeta(directorio_dest, f"{dato}")
             copiar_archivo(directorio_orig, archivo, carpeta_destino)
 
-directorio_orig = 'prueba_manual_jose_sin_mascara_1_correctas'
+directorio_orig = 'prueba_siguelinea_manual_3'
 directorio_dest = directorio_orig + '_separadas'
 
 organizar_archivos(directorio_orig, directorio_dest)
