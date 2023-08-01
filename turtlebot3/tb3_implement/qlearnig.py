@@ -48,27 +48,35 @@ VELOCITY_FACTOR = 1
 N_PX = 60*80
 
 # THRESHOLDS
-TH_DIST_IMAGE = 200000  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
-# TH_DIST_IMAGE = 150
-TH_R_IMAGE = 0.0000000000001
+# TH_DIST_IMAGE = 200000
+TH_DIST_IMAGE = 160000
+# TH_R_IMAGE = 0.8
+TH_R_IMAGE = 0.05
+# TH_R_IMAGE = 0.04
 
-# AREA REFORZO
+# # AREA REFORZO
 # W = 8
 # H = 6
 # X = 36
 # Y = 52
 
 # AREA REFORZO
-W = 48
-H = 12
-X = 16
-Y = 47
+# W = 48
+# H = 12
+# X = 16
+# Y = 47
 
 # AREA REFORZO
-# W = 56
-# H = 12
+W = 80
+H = 12
+X = 0
+Y = 47
+
+# AREA REFORZOs
+# W = 40
+# H = 24
 # X = 0
-# Y = 47
+# Y = 36
 
 # POLITICAE-GREEDY
 EPSILON = 0.00
@@ -84,6 +92,7 @@ TOPIC_CAMERA = '/camera/image'
 TOPIC_MODEL_STATE = '/gazebo/model_states'
 TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
 TOPIC_REINFORCEMENT = '/reinforcement'
+TOPIC_IMG_MASK = '/img_mask'
 
 class QLNode:
     def __init__(self, foldername):
@@ -94,6 +103,8 @@ class QLNode:
         self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
         self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
         self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
+        self.maskImg_publisher = rospy.Publisher(TOPIC_IMG_MASK, Image, queue_size=10)
+
 
         self.bridge = CvBridge()
         cv2.namedWindow("window", 1) 
@@ -219,7 +230,7 @@ class QLNode:
                 min_dist = distance
                 min_idx = i
 
-        print(list_dist)
+        # print(list_dist)
         list_dist = []
 
         if min_dist > TH_DIST_IMAGE: # estado novo  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
@@ -271,7 +282,8 @@ class QLNode:
         current_q_value = self.q_values[self.current_state][self.last_action]
 
         new_q_values = self.q_values[new_state]
-        print(self.q_values[self.current_state])
+        # print(self.q_values[self.current_state])
+        print([ "{:0.2f}".format(x) for x in self.q_values[self.current_state] ])
         max_q_value = numpy.amax(new_q_values, axis=None)
 
         new_q_value = current_q_value + LEARNING_RATE * (reward + DISCOUNT_FACTOR * max_q_value - current_q_value)
@@ -290,7 +302,7 @@ class QLNode:
         if self.valid_pos: # ultiuma posicion gardada se a lista non esta vacia
             last_pos = self.valid_pos[-1]
             model_state.pose = last_pos
-            self.valid_pos.pop()
+            # self.valid_pos.pop()
         else: # Posicion inicial
             # model_state.pose.position.x = 0.244979
             # model_state.pose.position.y = -1.786919
@@ -315,7 +327,7 @@ class QLNode:
         if self.valid_pos: # Xa existe algunha posicion miramos tempo transcurrido
             time = datetime.datetime.now()
             time_diff = time - self.time_last_pose_saved
-            if time_diff.seconds >= 10:
+            if time_diff.seconds >= 5:
                 self.valid_pos.append(self.robot_position)
                 self.time_last_pose_saved = time
         else: # se non existe posicion engadimos unha e gardamos o tempo actual
@@ -364,6 +376,9 @@ class QLNode:
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             if self.image is not None:
+                maskImg = self.mask_images(self.image)
+                maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
+                self.maskImg_publisher.publish(maskImgMsg)
                 
                 self.current_state = self.find_closest_state() # encontrar estado actual
                 print("estado actual: ", self.current_state)
@@ -379,7 +394,7 @@ class QLNode:
                     action = self.select_action() # seleccionar accion
 
                     self.execute_action(action=action) # executar accion selecionada
-                    # print("accion: ", action)
+                    print("accion: ", action)
 
                     message.data = f"action: {action},  state: {self.current_state}"
                     topic = f"/action_{action}"
@@ -408,7 +423,8 @@ class QLNode:
 
                     print("estado siguiente: ", new_state)
                     
-                    
+
+                    # if new_state != self.current_state:
                     self.update_q_values(reward, new_state) # actualizar q_values
 
                     if reward == -1: # recompensa negativa
