@@ -43,10 +43,11 @@ ACTIONS = 7
 VELOCITY_FACTOR = 1
 
 # THRESHOLDS
-TH_DIST_IMAGE = 200000
+# TH_DIST_IMAGE = 200000
+TH_DIST_IMAGE = 160000
 # TH_R_IMAGE = 0.8
-# TH_R_IMAGE = 0.05
-TH_R_IMAGE = 0.04
+TH_R_IMAGE = 0.05
+# TH_R_IMAGE = 0.04
 
 # # AREA REFORZO
 # W = 8
@@ -55,16 +56,16 @@ TH_R_IMAGE = 0.04
 # Y = 52
 
 # AREA REFORZO
-# W = 48
-# H = 12
-# X = 16
-# Y = 47
+W = 48
+H = 12
+X = 16
+Y = 47
 
 # AREA REFORZO
-W = 80
-H = 12
-X = 0
-Y = 47
+# W = 80
+# H = 12
+# X = 0
+# Y = 47
 
 # AREA REFORZO
 # W = 40
@@ -139,16 +140,16 @@ class ManualNode:
     def mask_images(self, img):
         h, w = img.shape[:2]
         # mascara 1, tercio superior
-        maskImg = numpy.zeros((h - int(h/3), w))
-        maskImg= img[int(h / 3):]
+        # maskImg = numpy.zeros((h - int(h/3), w))
+        # maskImg= img[int(h / 3):]
 
         # mascara 2, tercio superior, tercio dereito
         # maskImg = numpy.zeros((h - int(h/3), w - int(w/3)))
         # maskImg= img[int(h / 3):, :w - int(w/3)]
 
         # mascara 3, tercio superior, quinto esquerda, quinto dereita
-        # maskImg = numpy.zeros((h - int(h/3), w - int(w/5)*2))
-        # maskImg = img[int(h / 3):, int(w/5):w - int(w/5)]
+        maskImg = numpy.zeros((h - int(h/3), w - int(w/5)*2))
+        maskImg = img[int(h / 3):, int(w/5):w - int(w/5)]
 
         # mascara 4, tercio superior, quinto dereita
         # maskImg = numpy.zeros((h - int(h/3), w - int(w/5)))
@@ -332,9 +333,9 @@ class ManualNode:
             current_time = rospy.Time.now()
             
             if self.image is not None:
-                # maskImg = self.mask_images(self.image)
-                # maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
-                # self.maskImg_publisher.publish(maskImgMsg)
+                maskImg = self.mask_images(self.image)
+                maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
+                self.maskImg_publisher.publish(maskImgMsg)
 
                 if first:
                     # first_frame = self.image

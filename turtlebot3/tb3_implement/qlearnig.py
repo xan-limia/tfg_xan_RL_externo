@@ -54,6 +54,8 @@ TH_DIST_IMAGE = 160000
 TH_R_IMAGE = 0.05
 # TH_R_IMAGE = 0.04
 
+Q_VALUE_DAFAULT = 0.5
+
 # # AREA REFORZO
 # W = 8
 # H = 6
@@ -170,6 +172,24 @@ class QLNode:
 
         return maskImg
     
+    def check_default_action(self, angular_vel):
+        if angular_vel == 1.20:
+            action = 0
+        elif angular_vel == 0.90:
+            action = 1
+        elif angular_vel == 0.54:
+            action = 2
+        elif angular_vel == 0.0:
+            action = 3
+        elif angular_vel == -0.54:
+            action = 4
+        elif angular_vel == -0.90:
+            action = 5
+        elif angular_vel == -1.20:
+            action = 6
+        return action
+    
+    
     def load_images(self):
         if not os.path.exists(self.folder):
             os.makedirs(self.folder) # crear directorio se non existe
@@ -186,8 +206,18 @@ class QLNode:
 
                 # Transformar string nun vector q values
                 text = metadata['Exif.Photo.UserComment']  
-                q_values = eval(text.split("=")[1])
-                self.q_values.append(q_values)
+                if text.startswith("q_values"):
+                    q_values = eval(text.split("=")[1])
+                    self.q_values.append(q_values)
+                else:
+                    angular_vel = float(text.split("=")[2])
+                    action = self.check_default_action(angular_vel=angular_vel)
+                    init_q_values = [random.uniform(0, 0.1) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
+                    init_q_values[action] = Q_VALUE_DAFAULT
+                    self.q_values.append(init_q_values) # q values novo estado
+
+
+
         
         self.number_states = len(self.stored_images)
 
@@ -284,7 +314,7 @@ class QLNode:
         new_q_values = self.q_values[new_state]
         # print(self.q_values[self.current_state])
         print([ "{:0.2f}".format(x) for x in self.q_values[self.current_state] ])
-        max_q_value = numpy.amax(new_q_values, axis=None)
+        max_q_value = numpy.amax(new_q_values)
 
         new_q_value = current_q_value + LEARNING_RATE * (reward + DISCOUNT_FACTOR * max_q_value - current_q_value)
         self.q_values[self.current_state][self.last_action] = new_q_value
@@ -302,7 +332,7 @@ class QLNode:
         if self.valid_pos: # ultiuma posicion gardada se a lista non esta vacia
             last_pos = self.valid_pos[-1]
             model_state.pose = last_pos
-            # self.valid_pos.pop()
+            self.valid_pos.pop()
         else: # Posicion inicial
             # model_state.pose.position.x = 0.244979
             # model_state.pose.position.y = -1.786919
@@ -376,7 +406,9 @@ class QLNode:
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             if self.image is not None:
-                maskImg = self.mask_images(self.image)
+                image = self.image
+                # cv2.rectangle(image, (X, Y), (X + W, Y + H), (0, 0, 255), 1)
+                maskImg = self.mask_images(image)
                 maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
                 self.maskImg_publisher.publish(maskImgMsg)
                 
@@ -424,8 +456,8 @@ class QLNode:
                     print("estado siguiente: ", new_state)
                     
 
-                    # if new_state != self.current_state:
-                    self.update_q_values(reward, new_state) # actualizar q_values
+                    if new_state != self.current_state:
+                        self.update_q_values(reward, new_state) # actualizar q_values
 
                     if reward == -1: # recompensa negativa
                         message = String()
