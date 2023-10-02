@@ -10,7 +10,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Pose, Quaternion
 from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
-from std_msgs.msg import String, Bool
+from std_msgs.msg import String, Int16
 
 # PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
@@ -22,6 +22,7 @@ TOPIC_REINFORCEMENT = '/reinforcement'
 TOPIC_IMG_MASK = '/img_mask'
 TOPIC_JOY = '/joy'
 TOPIC_STOP_ROBOT = '/stop_robot'
+TOPIC_START_ROBOT = '/start_robot'
 
 class JoyNode:
     def __init__(self):
@@ -29,12 +30,14 @@ class JoyNode:
         rospy.init_node('joy_controller')
         self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
         self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
-        self.joy_suscriber = rospy.Subscriber(TOPIC_JOY, Joy, self.joy_callback)
-        self.manual_control_publisher = rospy.Publisher(TOPIC_STOP_ROBOT, Bool, queue_size=10)
+        self.manual_control_stop_publisher = rospy.Publisher(TOPIC_STOP_ROBOT, Int16, queue_size=10)
+        self.manual_control_start_publisher = rospy.Publisher(TOPIC_START_ROBOT, Int16, queue_size=10)
 
+        self.joy_suscriber = rospy.Subscriber(TOPIC_JOY, Joy, self.joy_callback)
+        
 
         self.joy = None
-        self.stop = False
+        self.stop = 0
         self.change = False
 
         self.inn = 0
@@ -79,12 +82,12 @@ class JoyNode:
         while True:
             if self.inn == 1:
                 if self.circle == 1:
-                    self.stop = True
-                    self.manual_control_publisher.publish(self.stop)
+                    self.stop = 1
+                    self.manual_control_stop_publisher.publish(self.stop)
                     self.stop_robot()
-                elif self.cross ==1 :
-                    self.stop = False
-                    self.manual_control_publisher.publish(self.stop)
+                elif self.cross == 1 :
+                    self.stop = 0
+                    self.manual_control_start_publisher.publish(self.stop)
 
                 elif self.triangle == 1:
                     twist = Twist()
@@ -93,14 +96,6 @@ class JoyNode:
                     self.velocity_publisher.publish(twist)
                 
                     
-
-            
-                
-                 
-        
-
-
-
 if __name__ == '__main__':
 
     node = JoyNode()

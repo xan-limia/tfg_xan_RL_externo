@@ -10,7 +10,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Pose, Quaternion
 from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
-from std_msgs.msg import String, Bool
+from std_msgs.msg import String, Int16
 
 
 
@@ -97,6 +97,7 @@ TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
 TOPIC_REINFORCEMENT = '/reinforcement'
 TOPIC_IMG_MASK = '/img_mask'
 TOPIC_STOP_ROBOT = '/stop_robot'
+TOPIC_START_ROBOT = '/start_robot'
 
 class QLNode:
     def __init__(self, foldername):
@@ -107,7 +108,8 @@ class QLNode:
         self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
         
         self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)        
-        self.manual_stop_subscriber = rospy.Subscriber(TOPIC_STOP_ROBOT, Bool, self.manual_stop_callback)
+        self.manual_stop_subscriber = rospy.Subscriber(TOPIC_STOP_ROBOT, Int16, self.manual_stop_callback)
+        self.manual_start_subscriber = rospy.Subscriber(TOPIC_START_ROBOT, Int16, self.manual_start_callback)
         self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
 
         self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
@@ -152,8 +154,10 @@ class QLNode:
         self.robot_position = msg.pose[robot_index]
 
     def manual_stop_callback(self, data):
-        self.stop_manual = data
+        self.stop_manual = 1
 
+    def manual_start_callback(self, data):
+        self.stop_manual = 0
     # IMAXES
 
     def image_callback(self, data):
@@ -415,84 +419,87 @@ class QLNode:
         self.bag = rosbag.Bag(self.bag_file, 'w')
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
-            if self.image is not None:
-                if self.stop_manual == False:
-                    image = self.image
-                    # cv2.rectangle(image, (X, Y), (X + W, Y + H), (0, 0, 255), 1)
-                    maskImg = self.mask_images(image)
-                    maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
-                    self.maskImg_publisher.publish(maskImgMsg)
-                    
-                    self.current_state = self.find_closest_state() # encontrar estado actual
-                    print("estado actual: ", self.current_state)
-
-                    # first_frame = self.image
+            if self.image is not None and self.stop_manual == 0:
                 
-                    if self.current_state is not None:
+                
+                image = self.image
+                # cv2.rectangle(image, (X, Y), (X + W, Y + H), (0, 0, 255), 1)
+                maskImg = self.mask_images(image)
+                maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
+                self.maskImg_publisher.publish(maskImgMsg)
+                
+                self.current_state = self.find_closest_state() # encontrar estado actual
+                print("estado actual: ", self.current_state)
+
+                # first_frame = self.image
+            
+                if self.current_state is not None:
+                    message = String()
+                    message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
+                    topic = f"/state_{str(self.current_state).zfill(2)}"
+                    self.bag.write(topic, message, current_time)
+                    
+                    action = self.select_action() # seleccionar accion
+
+                    self.execute_action(action=action) # executar accion selecionada
+                    print("accion: ", action)
+
+                    message.data = f"action: {action},  state: {self.current_state}"
+                    topic = f"/action_{action}"
+                    self.bag.write(topic, message, current_time)
+
+                    self.last_action = action 
+                    
+                    self.image = None
+
+                    while self.image is None:
+                        pass
+
+                    reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE) # obter recompensa
+
+                    # last_frame = self.image
+
+                    # distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
+
+                    new_state = self.find_closest_state() # obter o estado despois de executar a accion
+                    
+                    if new_state is None: # estado novo (crear)
+                        print(new_state)
+                        self.stop_robot() # eliminar no real
+                        self.append_states()
+                        new_state = self.find_closest_state()
+
+                    print("estado siguiente: ", new_state)
+                    
+
+                    if new_state != self.current_state:
+                        self.update_q_values(reward, new_state) # actualizar q_values
+
+                    if reward == -1: # recompensa negativa
                         message = String()
-                        message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
-                        topic = f"/state_{str(self.current_state).zfill(2)}"
-                        self.bag.write(topic, message, current_time)
+                        now = datetime.datetime.now()
+                        message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
+                        self.reinforcement_publisher.publish(message)
+                        self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
+
+                        self.reset_position() # reiniciar a ultima posicion gardada
                         
-                        action = self.select_action() # seleccionar accion
-
-                        self.execute_action(action=action) # executar accion selecionada
-                        print("accion: ", action)
-
-                        message.data = f"action: {action},  state: {self.current_state}"
-                        topic = f"/action_{action}"
-                        self.bag.write(topic, message, current_time)
-
-                        self.last_action = action 
-                        
-                        self.image = None
-
-                        while self.image is None:
-                            pass
-
-                        reward = self.check_ref_in_images(x=X, y=Y, w=W, h=H, threshold=TH_R_IMAGE) # obter recompensa
-
-                        # last_frame = self.image
-
-                        # distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
-
-                        new_state = self.find_closest_state() # obter o estado despois de executar a accion
-                        
-                        if new_state is None: # estado novo (crear)
-                            print(new_state)
-                            self.stop_robot() # eliminar no real
-                            self.append_states()
-                            new_state = self.find_closest_state()
-
-                        print("estado siguiente: ", new_state)
-                        
-
-                        if new_state != self.current_state:
-                            self.update_q_values(reward, new_state) # actualizar q_values
-
-                        if reward == -1: # recompensa negativa
-                            message = String()
-                            now = datetime.datetime.now()
-                            message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
-                            self.reinforcement_publisher.publish(message)
-                            self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
-
-                            self.reset_position() # reiniciar a ultima posicion gardada
-                            
-                        else:
-                            self.append_pos() # engadir nova posicion a cola
-
-                        self.image = None # reiniciar a imaxe capturada para obligar a ter unha nova
-
                     else:
-                        self.stop_robot()
+                        self.append_pos() # engadir nova posicion a cola
 
-                        self.append_states() # crear novo estado
+                    self.image = None # reiniciar a imaxe capturada para obligar a ter unha nova
 
-                        topic = "/images"
-                        self.bag.write(topic, self.img_msg, current_time)
+                else:
+                    self.stop_robot()
 
-                        self.image = None
+                    self.append_states() # crear novo estado
+
+                    topic = "/images"
+                    self.bag.write(topic, self.img_msg, current_time)
+
+                    self.image = None
+            else:
+                self.image = None
 
                     
 
