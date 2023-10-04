@@ -6,7 +6,7 @@ material course
     {
       texture_unit
       {
-        texture YellowLine1.png
+        texture YellowLine2.png
       }
     }
   }
