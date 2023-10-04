@@ -346,7 +346,7 @@ class QLNode:
         if self.valid_pos: # ultiuma posicion gardada se a lista non esta vacia
             last_pos = self.valid_pos[-1]
             model_state.pose = last_pos
-            self.valid_pos.pop()
+            del self.valid_pos[-1]
         else: # Posicion inicial
             # model_state.pose.position.x = 0.244979
             # model_state.pose.position.y = -1.786919
