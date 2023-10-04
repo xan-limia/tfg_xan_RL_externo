@@ -128,6 +128,8 @@ class QLNode:
         self.q_values = []
         self.valid_pos = deque(maxlen=10)
 
+        self.isfinish = 0
+
         # self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
         self.actions = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
 
@@ -417,7 +419,10 @@ class QLNode:
     def train(self):
         self.load_images()
         self.bag = rosbag.Bag(self.bag_file, 'w')
+        rigth_lap = False
         while not rospy.is_shutdown():
+            if self.isfinish == 3:
+                break
             current_time = rospy.Time.now()
             if self.image is not None and self.stop_manual == 0:
                 
@@ -476,6 +481,7 @@ class QLNode:
                         self.update_q_values(reward, new_state) # actualizar q_values
 
                     if reward == -1: # recompensa negativa
+                        self.isfinish = 0
                         message = String()
                         now = datetime.datetime.now()
                         message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
@@ -486,6 +492,14 @@ class QLNode:
                         
                     else:
                         self.append_pos() # engadir nova posicion a cola
+
+                    
+                    if self.robot_position.position.x > -0.05 and self.robot_position.position.x < 0.15 and self.robot_position.position.y < -1.6 and self.robot_position.position.y > -1.8:
+                        rigth_lap = True
+                    elif rigth_lap:
+                        self.isfinish = self.isfinish+1
+                        rigth_lap = False
+
 
                     self.image = None # reiniciar a imaxe capturada para obligar a ter unha nova
 
