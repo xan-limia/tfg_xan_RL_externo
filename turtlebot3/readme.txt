@@ -1,4 +1,4 @@
-Execución do entorno en Windows:
+Execución do entorno:
 
 	1. Iniciar docker, 
 	2. Iniciar Xming. Importante activar a opción de "No acces control". Resto vai por defecto
@@ -10,7 +10,7 @@ Execución do codigo:
 	1. É preciso utilizar varios terminais. Podese utilizar tmux para abrir o multiplexador de terminales ou lanzar varios contenerdores docker.
 	2. cd src/tb3_implements
 	3. Nunha terminal lanzar -> roslaunch turtlebot3_autorace.launch
-	4. Noutra terminal -> pip install pyexiv2 e a continuación python3 reforzoAleatorio.py <nome_da_carpeta>
+	4. Noutra terminal -> pip install pyexiv2==2.8.1 e a continuación python3 qlearning.py <nome_da_carpeta>
 	5. Para ver a camara lanzar noutra terminal -> rqt
 
 
