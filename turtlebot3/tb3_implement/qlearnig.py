@@ -55,7 +55,7 @@ TH_DIST_IMAGE = 160000
 TH_R_IMAGE = 0.05
 # TH_R_IMAGE = 0.04
 
-Q_VALUE_DAFAULT = 0.5
+Q_VALUE_DEFAULT = 0.01
 
 # # AREA REFORZO
 # W = 8
@@ -226,8 +226,8 @@ class QLNode:
                 else:
                     angular_vel = float(text.split("=")[2])
                     action = self.check_default_action(angular_vel=angular_vel)
-                    init_q_values = [random.uniform(0, 0.1) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
-                    init_q_values[action] = Q_VALUE_DAFAULT
+                    init_q_values = [random.uniform(0, 0.01) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
+                    init_q_values[action] = Q_VALUE_DEFAULT
                     self.q_values.append(init_q_values) # q values novo estado
 
 
@@ -285,7 +285,7 @@ class QLNode:
     def append_states(self):
         if self.image is not None:
             self.stored_images.append(self.image) # novo estado
-            init_q_values = [random.uniform(0, 0.1) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
+            init_q_values = [random.uniform(0, 0.01) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
             self.q_values.append(init_q_values) # q values novo estado
         self.number_states = len(self.stored_images)
 
