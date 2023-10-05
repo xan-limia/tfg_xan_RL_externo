@@ -1,0 +1,24 @@
+#!usr/bin/env python
+import rospy
+if __name__=="__main__":
+  course_texture = rospy.get_param("course_texture")
+
+  text = """
+  material course
+  {
+    technique
+    {
+      pass
+      {
+        texture_unit
+        {
+          texture example
+        }
+      }
+    }
+}"""
+
+  text_with_course = text.replace("example", course_texture)
+  print("hola mundo")
+  with open('/turtlebot3_ws/src/turtlebot3_simulations/turtlebot3_gazebo/models/turtlebot3_autorace/course/materials/scripts/course.material', 'w') as material_file:
+      material_file.write(text_with_course)
