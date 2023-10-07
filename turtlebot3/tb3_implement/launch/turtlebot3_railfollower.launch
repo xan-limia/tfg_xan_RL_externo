@@ -8,7 +8,7 @@
   <arg name="texture" default="course6.png"/>
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find turtlebot3_gazebo)/worlds/turtlebot3_test.world" />
+    <arg name="world_name" value="/turtlebot3_ws/src/turtlebot3/turtlebot3_description/urdf/turtlebot3_test.world" />
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
