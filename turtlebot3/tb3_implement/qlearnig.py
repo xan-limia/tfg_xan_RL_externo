@@ -12,6 +12,8 @@ from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String, Int16
 
+import utilities as u
+
 
 
 # Ctrl+C to quit
@@ -28,7 +30,7 @@ Posibles Accions
 7 Xiro Dereita Mais Brusco
 """
 
-ACTIONS = 7
+ACTIONS = 5
 
 # msg = """
 # Posibles Accions 
@@ -49,8 +51,8 @@ VELOCITY_FACTOR = 1
 N_PX = 60*80
 
 # THRESHOLDS
-# TH_DIST_IMAGE = 200000
-TH_DIST_IMAGE = 160000
+TH_DIST_IMAGE = 650000
+# TH_DIST_IMAGE = 160000
 # TH_R_IMAGE = 0.8
 TH_R_IMAGE = 0.05
 # TH_R_IMAGE = 0.04
@@ -69,7 +71,7 @@ Q_VALUE_DEFAULT = 0.01
 # X = 16
 # Y = 47
 
-# AREA REFORZO
+# AREA REFORZO 66666666666
 W = 80
 H = 12
 X = 0
@@ -99,6 +101,8 @@ TOPIC_IMG_MASK = '/img_mask'
 TOPIC_STOP_ROBOT = '/stop_robot'
 TOPIC_START_ROBOT = '/start_robot'
 
+MASK = (3,0,5,5)
+
 class QLNode:
     def __init__(self, foldername):
 
@@ -120,6 +124,7 @@ class QLNode:
 
         self.image = None
         self.img_msg = None
+        self.first_position = None
         self.robot_position = None
 
         self.stop_manual = False
@@ -127,11 +132,12 @@ class QLNode:
         self.stored_images = []
         self.q_values = []
         self.valid_pos = deque(maxlen=10)
-
+        
+        self.finish_position = None
         self.isfinish = 0
 
-        # self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
-        self.actions = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
+        self.actions = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+        # self.actions = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
 
         self.stored_velocities = []
         self.number_states = 0
@@ -148,8 +154,6 @@ class QLNode:
         self.linear_vel   = 0.0
         self.angular_vel  = 0.0
 
-    def vels(self, linear_vel, angular_vel):
-        return "currently:\tlinear vel %s\t angular vel %s " % (linear_vel,angular_vel)
     
     def position_callback(self, msg):
         robot_index = msg.name.index(MODEL)
@@ -167,26 +171,6 @@ class QLNode:
         image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
         # self.image = self.mask_images(image_bridge)
         self.image = image_bridge ## Descomentar para executar sen mascara
-
-    def mask_images(self, img):
-        h, w = img.shape[:2]
-        # mascara 1, tercio superior
-        # maskImg = numpy.zeros((h - int(h/3), w))
-        # maskImg= img[int(h / 3):]
-
-        # mascara 2, tercio superior, tercio dereito
-        # maskImg = numpy.zeros((h - int(h/3), w - int(w/3)))
-        # maskImg= img[int(h / 3):, :w - int(w/3)]
-
-        # mascara 3, tercio superior, quinto esquerda, quinto dereita
-        maskImg = numpy.zeros((h - int(h/3), w - int(w/5)*2))
-        maskImg = img[int(h / 3):, int(w/5):w - int(w/5)]
-
-        # mascara 4, tercio superior, quinto dereita
-        # maskImg = numpy.zeros((h - int(h/3), w - int(w/5)))
-        # maskImg = img[int(h / 3):, :w - int(w/5)]
-
-        return maskImg
     
     def check_default_action(self, angular_vel):
         if angular_vel == 1.20:
@@ -225,16 +209,15 @@ class QLNode:
                 if text.startswith("q_values"):
                     q_values = eval(text.split("=")[1])
                     self.q_values.append(q_values)
-                else:
+                elif text.startswith("linear"):
                     angular_vel = float(text.split("=")[2])
                     action = self.check_default_action(angular_vel=angular_vel)
                     init_q_values = [random.uniform(0, 0.01) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
                     init_q_values[action] = Q_VALUE_DEFAULT
                     self.q_values.append(init_q_values) # q values novo estado
-
-
-
-        
+                else:
+                    init_q_values = [random.uniform(0, 0.01) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
+                    self.q_values.append(init_q_values) # q values novo estado
         self.number_states = len(self.stored_images)
 
 
@@ -258,31 +241,6 @@ class QLNode:
         else:
             return -1
 
-    def find_closest_state(self):
-        print("estados", len(self.stored_images))
-
-        list_dist = []
-        if len(self.stored_images) == 0:
-            return None
-        min_dist = float('inf')
-        min_idx = -1
-        # maskImg = self.image
-        maskImg = self.mask_images(self.image)
-        for i, img in enumerate(self.stored_images):
-            mimg = self.mask_images(img=img)
-            distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2))
-            list_dist.append([distance, i])
-            if distance < min_dist:
-                min_dist = distance
-                min_idx = i
-
-        # print(list_dist)
-        list_dist = []
-
-        if min_dist > TH_DIST_IMAGE: # estado novo  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
-            return None
-        else:
-            return min_idx # detectamos estado actual
         
     def append_states(self):
         if self.image is not None:
@@ -345,23 +303,15 @@ class QLNode:
         model_state = ModelState()
         model_state.model_name = MODEL 
 
-        if self.valid_pos: # ultiuma posicion gardada se a lista non esta vacia
+        if self.valid_pos: # ultima posicion gardada se a lista non esta vacia
             last_pos = self.valid_pos[-1]
             model_state.pose = last_pos
+            self.finish_position = last_pos
             del self.valid_pos[-1]
-        else: # Posicion inicial
-            # model_state.pose.position.x = 0.244979
-            # model_state.pose.position.y = -1.786919
-            # model_state.pose.position.z = -0.001002
+        else: # Posicion inicial        
+            model_state.pose = self.first_position
+            self.finish_position = self.first_position
 
-            model_state.pose.position.x = 0.244508
-            model_state.pose.position.y = -1.631067
-            model_state.pose.position.z = -0.001002
-
-            # model_state.pose.position.x = 0.244508
-            # model_state.pose.position.y = -1.704041
-            # model_state.pose.position.z = -0.001002
-            
         self.set_position(model_state)
 
         self.time_last_pose_saved = datetime.datetime.now() # reiniciamos o tempo de gardado de posicion para evitar que se garde a posicion onde se detecta reforzo
@@ -417,10 +367,17 @@ class QLNode:
             
     ## ENTRENAR
     def train(self):
+        # print(self.q_values)
+        # self.stored_images, self.q_values, self.number_states = u.load_images_ql(folder=self.folder)
+        # print(self.q_values)
         self.load_images()
         self.bag = rosbag.Bag(self.bag_file, 'w')
         rigth_lap = False
+        
+        self.first_position = self.robot_position
+        self.finish_position = self.first_position
         while not rospy.is_shutdown():
+            
             if self.isfinish == 3:
                 break
             current_time = rospy.Time.now()
@@ -429,11 +386,11 @@ class QLNode:
                 
                 image = self.image
                 # cv2.rectangle(image, (X, Y), (X + W, Y + H), (0, 0, 255), 1)
-                maskImg = self.mask_images(image)
+                maskImg = u.mask_images(image, MASK)
                 maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
                 self.maskImg_publisher.publish(maskImgMsg)
                 
-                self.current_state = self.find_closest_state() # encontrar estado actual
+                self.current_state = u.find_closest_state(self.image, self.stored_images) # encontrar estado actual
                 print("estado actual: ", self.current_state)
 
                 # first_frame = self.image
@@ -466,18 +423,18 @@ class QLNode:
 
                     # distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
 
-                    new_state = self.find_closest_state() # obter o estado despois de executar a accion
+                    new_state = u.find_closest_state(self.image, self.stored_images) # obter o estado despois de executar a accion
                     
                     if new_state is None: # estado novo (crear)
                         print(new_state)
                         self.stop_robot() # eliminar no real
                         self.append_states()
-                        new_state = self.find_closest_state()
+                        new_state = u.find_closest_state(self.image, self.stored_images)
 
                     print("estado siguiente: ", new_state)
                     
 
-                    if new_state != self.current_state:
+                    if new_state != self.current_state: # or reward == -1:
                         self.update_q_values(reward, new_state) # actualizar q_values
 
                     if reward == -1: # recompensa negativa
@@ -487,14 +444,14 @@ class QLNode:
                         message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
                         self.reinforcement_publisher.publish(message)
                         self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
-
+                        
                         self.reset_position() # reiniciar a ultima posicion gardada
                         
                     else:
                         self.append_pos() # engadir nova posicion a cola
 
                     
-                    if self.robot_position.position.x > -0.05 and self.robot_position.position.x < 0.15 and self.robot_position.position.y < -1.6 and self.robot_position.position.y > -1.8:
+                    if self.robot_position.position.x >= self.finish_position.position.x - 0.1 and self.robot_position.position.x <= self.finish_position.position.x + 0.1 and self.robot_position.position.y >= self.finish_position.position.y - 0.1 and self.robot_position.position.y <= self.finish_position.position.y + 0.1:
                         rigth_lap = True
                     elif rigth_lap:
                         self.isfinish = self.isfinish+1
@@ -541,5 +498,9 @@ if __name__ == '__main__':
     node.train() # executar entrenamento
 
     node.stop_robot()
+
+    node.write_images() 
+
+    node.bag.close() # cerrar ficheiro bag
     
     

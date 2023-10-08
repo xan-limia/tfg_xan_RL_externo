@@ -21,11 +21,43 @@ def check_ref_in_images(img, x, y, w, h, threshold):
     
     return percentage >= threshold
 
+MASK = (3,0,0,0)
+
+def mask_images(img, mask):
+        h, w = img.shape[:2]
+        
+        if mask[0] == 0:
+            up = 0
+        else:
+            up = int(h/mask[0])
+
+        if mask[1] == 0:
+            down = 0
+        else:
+            down = int(h/mask[1])
+
+        if mask[2] == 0:
+            left = 0
+        else:
+            left = int(w/mask[2])
+
+        if mask[3] == 0:
+            rigth = 0
+        else:
+            rigth = int(w/mask[3])
+       
+        maskImg = np.zeros((h - up - down, w - left - rigth))
+        maskImg = img[up:h - down, left:w - rigth]
+        # maskImg = np.zeros_like(img)
+        # maskImg[up:h - down, left:w - rigth] = img[up:h - down, left:w - rigth]
+
+        return maskImg
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
             print("Usando carpeta por defecto")
-            folder = "prueba_accion_manual_siguelinea2_m3_d150_r005"
+            folder = "pruebas/prueba_accion_manual_1_siguelinea_m3_d150_r005"
     else:
         folder = sys.argv[1]
     i = 0
@@ -44,10 +76,7 @@ if __name__ == '__main__':
             print(img.shape)
 
             threshold = THRESHOLD
-            h1, w1 = img.shape[:2]
-            maskImg = np.zeros_like(img)
-            # maskImg[int(h1 / 3):, int(w1/5):w1 - int(w1/5)] = img[int(h1 / 3):, int(w1/5):w1 - int(w1/5)]
-            maskImg[int(h1 / 3):] = img[int(h1 / 3):]
+            maskImg = mask_images(img=img, mask=MASK)
 
             cv2.rectangle(maskImg, (x, y), (x + W, y + H), (0, 0, 255), 1)
             imgr = cv2.resize(maskImg, (320, 240))
