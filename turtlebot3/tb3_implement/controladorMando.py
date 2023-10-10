@@ -10,7 +10,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist, Pose, Quaternion
 from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
-from std_msgs.msg import String, Int16
+from std_msgs.msg import String, Float32, Int16
 
 # PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
@@ -34,6 +34,8 @@ class JoyNode:
         self.manual_control_start_publisher = rospy.Publisher(TOPIC_START_ROBOT, Int16, queue_size=10)
 
         self.joy_suscriber = rospy.Subscriber(TOPIC_JOY, Joy, self.joy_callback)
+
+        self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)
         
 
         self.joy = None
@@ -42,8 +44,15 @@ class JoyNode:
 
         self.inn = 0
 
+        self.linear = 0.15
         
+        self.img_msg = None
+
         
+    def image_callback(self, data):
+        self.img_msg = data
+
+ 
 
     def joy_callback(self, data):
 
@@ -60,7 +69,7 @@ class JoyNode:
 
         if numpy.shape(self.axes)[0]>0:
           self.inn=1
-          self.linear=self.axes[1]
+          # self.linear=self.axes[1]
           self.angular=self.axes[0]
         
         if self.inn==1:
@@ -78,7 +87,8 @@ class JoyNode:
 
 
     def controller(self):
-            
+        self.bag = rosbag.Bag('manual_teleop_y2.bag', 'w')
+        angular = -1
         while True:
             if self.inn == 1:
                 if self.circle == 1:
@@ -90,10 +100,22 @@ class JoyNode:
                     self.manual_control_start_publisher.publish(self.stop)
 
                 elif self.triangle == 1:
+                    
                     twist = Twist()
                     twist.linear.x = self.linear; twist.linear.y = 0.0; twist.linear.z = 0.0
                     twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular
                     self.velocity_publisher.publish(twist)
+
+                    if self.angular != angular:
+                        current_time = rospy.Time.now()
+                        topic = "/images"
+                        self.bag.write(topic, self.img_msg, current_time)
+
+                        angular_vel = Float32()
+                        angular_vel.data = self.angular
+                        self.bag.write("/angular", angular_vel, current_time)
+
+                    angular = self.angular
                 
                     
 if __name__ == '__main__':
@@ -101,6 +123,7 @@ if __name__ == '__main__':
     node = JoyNode()
 
     def signal_handler(sig, frame):
+        node.bag.close() # cerrar ficheiro bag
         exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
