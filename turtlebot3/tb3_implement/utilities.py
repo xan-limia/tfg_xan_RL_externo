@@ -12,65 +12,52 @@ from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String, Int16
 
-ACTIONS = 7
-
-# msg = """
-# Posibles Accions 
-# ---------------------------
-# 1 Xiro Esquerda Brusco
-# 2 Xiro Esquerda Suave
-# 3 Avanzar Recto
-# 4 Xiro Dereita Suave
-# 5 Xiro Dereita Brusco
-# """
-
-# ACTIONS = 5
-
 VELOCITY_FACTOR = 1
 
 # PIXELES
-
 N_PX = 60*80
 
 # THRESHOLDS
-# TH_DIST_IMAGE = 200000
-TH_DIST_IMAGE = 180000
-# TH_R_IMAGE = 0.8
-TH_R_IMAGE = 0.05
-# TH_R_IMAGE = 0.04
+TH_DIST_IMAGE = 160000
 
-Q_VALUE_DEFAULT = 0.01
-
-# # AREA REFORZO
+# # AREA REFORZO (Sigue carril)
 # W = 8
 # H = 6
 # X = 36
 # Y = 52
 
-# AREA REFORZO
-# W = 48
-# H = 12
-# X = 16
-# Y = 47
+# COLOR = 0
+# TH_R_IMAGE = 0.8
 
-# AREA REFORZO
-W = 80
+# MASCARA
+MASK = (3,0,5,5)
+
+# AREA REFORZO (Sigue lineas) MASK = (3,0,5,5)
+W = 48
 H = 12
-X = 0
+X = 16
 Y = 47
 
-# AREA REFORZOs
-# W = 40
-# H = 24
-# X = 0
-# Y = 36
+COLOR = 255 # Color co que se mide o reforzo
+TH_R_IMAGE = 0.05
 
-# POLITICAE-GREEDY
-EPSILON = 0.00
+# ACIONS
+N_ACTIONS = 5
+ACTIONS = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+# ACTIONS = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
 
-# PARAMETROS Q-LEARNING
-LEARNING_RATE = 0.1 
-DISCOUNT_FACTOR = 0.9
+
+msg = """
+Posibles Accions 
+---------------------------
+1 Xiro Esquerda Brusco
+2 Xiro Esquerda Suave
+3 Avanzar Recto
+4 Xiro Dereita Suave
+5 Xiro Dereita Brusco
+
+enter reinterar calcular
+"""
 
 # PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
@@ -84,58 +71,9 @@ TOPIC_STOP_ROBOT = '/stop_robot'
 TOPIC_START_ROBOT = '/start_robot'
 
 
-# def vels(linear_vel, angular_vel):
-#         return "currently:\tlinear vel %s\t angular vel %s " % (linear_vel,angular_vel)
+# ENMASCARAR IMAXE
 
-def check_default_action(angular_vel):
-        if angular_vel == 1.20:
-            action = 0
-        elif angular_vel == 0.90:
-            action = 1
-        elif angular_vel == 0.54:
-            action = 2
-        elif angular_vel == 0.0:
-            action = 3
-        elif angular_vel == -0.54:
-            action = 4
-        elif angular_vel == -0.90:
-            action = 5
-        elif angular_vel == -1.20:
-            action = 6
-        return action
-
-def load_images_ql(folder, stored_images = [], q_values = []):
-    if not os.path.exists(folder):
-        os.makedirs(folder) # crear directorio se non existe
-        return
-    for filename in os.listdir(folder):
-        if(filename.endswith('.png')):
-            img = cv2.imread(os.path.join(folder, filename))
-            stored_images.append(img) # Gardar imaxe sen mascara
-
-            img = pyexiv2.Image(os.path.join(folder, filename)) # ler a imaxe con pyexiv para acceder os metadatos
-            metadata = img.read_exif() # ler metadato
-
-            # Transformar string nun vector q values
-            text = metadata['Exif.Photo.UserComment']  
-            if text.startswith("q_values"):
-                q_values = eval(text.split("=")[1])
-                q_values.append(q_values)
-            elif text.startswith("linear"):
-                angular_vel = float(text.split("=")[2])
-                action = check_default_action(angular_vel=angular_vel)
-                init_q_values = [random.uniform(0, 0.01) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
-                init_q_values[action] = Q_VALUE_DEFAULT
-                q_values.append(init_q_values) # q values novo estado
-            else:
-                init_q_values = [random.uniform(0, 0.01) for _ in range(ACTIONS)] # inicializar de forma aleatoria 0 e 0.1
-                q_values.append(init_q_values) # q values novo estado
-    number_states = len(stored_images)
-    return stored_images, q_values, number_states
-
-MASK = (3,0,5,5)
-
-def mask_images(img, mask):
+def mask_images(img, mask = MASK):
         h, w = img.shape[:2]
         
         if mask[0] == 0:
@@ -166,7 +104,11 @@ def mask_images(img, mask):
 
         return maskImg
 
-def find_closest_state(image, stored_images):
+
+
+# ENCONTRAR ESTADO MAIS CERCANO
+
+def find_closest_state(image, stored_images, threshold = TH_DIST_IMAGE):
         print("estados", len(stored_images))
 
         list_dist = []
@@ -174,9 +116,9 @@ def find_closest_state(image, stored_images):
             return None
         min_dist = float('inf')
         min_idx = -1
-        maskImg = mask_images(image, MASK)
+        maskImg = mask_images(img=image)
         for i, img in enumerate(stored_images):
-            mimg = mask_images(img=img, mask=MASK)
+            mimg = mask_images(img=img[0])
             distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2))
             list_dist.append([distance, i])
             if distance < min_dist:
@@ -186,7 +128,167 @@ def find_closest_state(image, stored_images):
         # print(list_dist)
         list_dist = []
 
-        if min_dist > TH_DIST_IMAGE: # estado novo  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
+        if min_dist > threshold: # estado novo  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
             return None
         else:
-            return min_idx # detectamos estado actual
+            return min_idx # detectamos estado actual       
+
+# DETECTAR REFORZO NA IMAXE    
+def check_ref_in_images(image, threshold = TH_R_IMAGE, color = COLOR, w = W, h = H, x = X, y = Y):
+        img_gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
+        region = img_binaria[y:y+h, x:x+w]
+
+        # black_region = numpy.zeros((h, w), dtype=numpy.uint8)
+        # coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
+
+        ref_region = numpy.ones((h, w), dtype=numpy.uint8) * color
+        coincidences = cv2.compare(region, ref_region, cv2.CMP_EQ)
+
+        percentage = numpy.count_nonzero(coincidences) / coincidences.size
+        # print(percentage)
+
+        if percentage >= threshold:
+            return 0.01
+        else:
+            return -1
+
+# NODO COS DATOS COMUNS
+class TrainingNode:
+    def __init__(self, foldername, actions = ACTIONS):
+
+        self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
+        self.maskImg_publisher = rospy.Publisher(TOPIC_IMG_MASK, Image, queue_size=10)
+        self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
+        
+        self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)        
+        self.manual_stop_subscriber = rospy.Subscriber(TOPIC_STOP_ROBOT, Int16, self.manual_stop_callback)
+        self.manual_start_subscriber = rospy.Subscriber(TOPIC_START_ROBOT, Int16, self.manual_start_callback)
+        self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
+
+        self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
+
+        self.bridge = CvBridge()
+
+        self.image = None
+        self.img_msg = None
+        self.first_position = None
+        self.robot_position = None
+        self.first_pos_call = True
+
+        self.stop_manual = False
+
+        self.stored_images = []
+        self.valid_pos = deque(maxlen=10)
+        
+        self.finish_position = None
+        self.isfinish = 0
+        self.rigth_lap = False
+
+
+        self.actions = ACTIONS
+        self.n_actions = N_ACTIONS
+
+        self.number_states = 0
+        self.current_state = None
+        self.last_action = None
+
+        self.folder = foldername
+
+        now = datetime.datetime.now()
+        bag_name = f"{self.folder}/{self.folder}_{now.strftime('%Y-%m-%d_%H-%M-%S-%f')}.bag"
+        self.bag_file = os.path.join(os.getcwd(), bag_name)
+        self.bag = None
+
+        self.linear_vel   = 0.0
+        self.angular_vel  = 0.0
+
+    ## CALLBACKS DE TOPICS
+    def position_callback(self, msg):
+        robot_index = msg.name.index(MODEL)
+        self.robot_position = msg.pose[robot_index]
+        
+        if self.first_pos_call:
+
+            self.first_position = self.robot_position
+            self.finish_position = self.first_position
+            self.first_pos_call = False
+
+    def manual_stop_callback(self, data):
+        self.stop_manual = 1
+
+    def manual_start_callback(self, data):
+        self.stop_manual = 0
+
+    def image_callback(self, data):
+        self.img_msg = data
+        image_bridge = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        self.image = image_bridge
+
+        maskImg = mask_images(img=image_bridge)
+        maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
+        self.maskImg_publisher.publish(maskImgMsg)
+
+    ## EXECUTAR ACCION
+    def execute_action(self, action):
+    
+        self.linear_vel = self.actions[action][0] * VELOCITY_FACTOR
+        self.angular_vel = self.actions[action][1] * VELOCITY_FACTOR
+
+        twist = Twist()
+
+        twist.linear.x = self.linear_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
+
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = self.angular_vel
+
+        self.velocity_publisher.publish(twist)
+
+    ## REINICIAR POSICION ROBOT
+    def reset_position(self):
+        # print(len(self.valid_pos))
+
+        model_state = ModelState()
+        model_state.model_name = MODEL 
+
+        if self.valid_pos: # ultima posicion gardada se a lista non esta vacia
+            last_pos = self.valid_pos[-1]
+            model_state.pose = last_pos
+            self.finish_position = last_pos
+            del self.valid_pos[-1]
+        else: # Posicion inicial        
+            model_state.pose = self.first_position
+            self.finish_position = self.first_position
+
+        self.set_position(model_state)
+
+        self.time_last_pose_saved = datetime.datetime.now() # reiniciamos o tempo de gardado de posicion para evitar que se garde a posicion onde se detecta reforzo
+
+    ## ENGADIR POSICIONS A COLA
+    def append_pos(self):
+
+        if self.valid_pos: # Xa existe algunha posicion miramos tempo transcurrido
+            time = datetime.datetime.now()
+            time_diff = time - self.time_last_pose_saved
+            if time_diff.seconds >= 5:
+                self.valid_pos.append(self.robot_position)
+                self.time_last_pose_saved = time
+        else: # se non existe posicion engadimos unha e gardamos o tempo actual
+            self.valid_pos.append(self.robot_position)
+            self.time_last_pose_saved = datetime.datetime.now()
+
+
+    ## DETER ROBOT
+    def stop_robot(self):
+        twist = Twist()
+        twist.linear.x = 0.0; twist.linear.y = 0.0; twist.linear.z = 0.0
+        twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = 0.0
+        self.velocity_publisher.publish(twist)
+
+    def check_finish_pos(self):
+        if self.robot_position == None or self.finish_position == None:
+            pass
+        elif self.robot_position.position.x >= self.finish_position.position.x - 0.1 and self.robot_position.position.x <= self.finish_position.position.x + 0.1 and self.robot_position.position.y >= self.finish_position.position.y - 0.1 and self.robot_position.position.y <= self.finish_position.position.y + 0.1:
+            self.rigth_lap = True
+        elif self.rigth_lap:
+            self.isfinish = self.isfinish+1
+            self.rigth_lap = False
