@@ -13,6 +13,7 @@ from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String, Int16
 
 import parametres as par
+from parametres import msg
 
 
 # ENMASCARAR IMAXE
