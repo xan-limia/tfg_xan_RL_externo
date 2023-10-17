@@ -12,68 +12,12 @@ from gazebo_msgs.msg import ModelState, ModelStates
 from gazebo_msgs.srv import SetModelState
 from std_msgs.msg import String, Int16
 
-VELOCITY_FACTOR = 1
-
-# PIXELES
-N_PX = 60*80
-
-# THRESHOLDS
-TH_DIST_IMAGE = 160000
-
-# # AREA REFORZO (Sigue carril)
-# W = 8
-# H = 6
-# X = 36
-# Y = 52
-
-# COLOR = 0
-# TH_R_IMAGE = 0.8
-
-# MASCARA
-MASK = (3,0,5,5)
-
-# AREA REFORZO (Sigue lineas) MASK = (3,0,5,5)
-W = 48
-H = 12
-X = 16
-Y = 47
-
-COLOR = 255 # Color co que se mide o reforzo
-TH_R_IMAGE = 0.05
-
-# ACIONS
-N_ACTIONS = 5
-ACTIONS = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
-# ACTIONS = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
-
-
-msg = """
-Posibles Accions 
----------------------------
-1 Xiro Esquerda Brusco
-2 Xiro Esquerda Suave
-3 Avanzar Recto
-4 Xiro Dereita Suave
-5 Xiro Dereita Brusco
-
-enter reinterar calcular
-"""
-
-# PARAMETROS ROBOT
-MODEL = 'turtlebot3_burger'
-TOPIC_VEL = '/cmd_vel'
-TOPIC_CAMERA = '/camera/image'
-TOPIC_MODEL_STATE = '/gazebo/model_states'
-TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
-TOPIC_REINFORCEMENT = '/reinforcement'
-TOPIC_IMG_MASK = '/img_mask'
-TOPIC_STOP_ROBOT = '/stop_robot'
-TOPIC_START_ROBOT = '/start_robot'
+import parametres as par
 
 
 # ENMASCARAR IMAXE
 
-def mask_images(img, mask = MASK):
+def mask_images(img, mask = par.MASK):
         h, w = img.shape[:2]
         
         if mask[0] == 0:
@@ -108,7 +52,7 @@ def mask_images(img, mask = MASK):
 
 # ENCONTRAR ESTADO MAIS CERCANO
 
-def find_closest_state(image, stored_images, threshold = TH_DIST_IMAGE):
+def find_closest_state(image, stored_images, threshold = par.TH_DIST_IMAGE):
         print("estados", len(stored_images))
 
         list_dist = []
@@ -134,7 +78,7 @@ def find_closest_state(image, stored_images, threshold = TH_DIST_IMAGE):
             return min_idx # detectamos estado actual       
 
 # DETECTAR REFORZO NA IMAXE    
-def check_ref_in_images(image, threshold = TH_R_IMAGE, color = COLOR, w = W, h = H, x = X, y = Y):
+def check_ref_in_images(image, threshold = par.TH_R_IMAGE, color = par.COLOR, w = par.W, h = par.H, x = par.X, y = par.Y):
         img_gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
         region = img_binaria[y:y+h, x:x+w]
@@ -155,18 +99,18 @@ def check_ref_in_images(image, threshold = TH_R_IMAGE, color = COLOR, w = W, h =
 
 # NODO COS DATOS COMUNS
 class TrainingNode:
-    def __init__(self, foldername, actions = ACTIONS):
+    def __init__(self, foldername, actions = par.ACTIONS):
 
-        self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
-        self.maskImg_publisher = rospy.Publisher(TOPIC_IMG_MASK, Image, queue_size=10)
-        self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
+        self.velocity_publisher = rospy.Publisher(par.TOPIC_VEL, Twist, queue_size=10)
+        self.maskImg_publisher = rospy.Publisher(par.TOPIC_IMG_MASK, Image, queue_size=10)
+        self.reinforcement_publisher = rospy.Publisher(par.TOPIC_REINFORCEMENT, String, queue_size=10)
         
-        self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)        
-        self.manual_stop_subscriber = rospy.Subscriber(TOPIC_STOP_ROBOT, Int16, self.manual_stop_callback)
-        self.manual_start_subscriber = rospy.Subscriber(TOPIC_START_ROBOT, Int16, self.manual_start_callback)
-        self.model_position_subscriber = rospy.Subscriber(TOPIC_MODEL_STATE, ModelStates, self.position_callback)
+        self.image_subscriber = rospy.Subscriber(par.TOPIC_CAMERA, Image, self.image_callback)        
+        self.manual_stop_subscriber = rospy.Subscriber(par.TOPIC_STOP_ROBOT, Int16, self.manual_stop_callback)
+        self.manual_start_subscriber = rospy.Subscriber(par.TOPIC_START_ROBOT, Int16, self.manual_start_callback)
+        self.model_position_subscriber = rospy.Subscriber(par.TOPIC_MODEL_STATE, ModelStates, self.position_callback)
 
-        self.set_position = rospy.ServiceProxy(TOPIC_SET_MODEL_STATE, SetModelState)
+        self.set_position = rospy.ServiceProxy(par.TOPIC_SET_MODEL_STATE, SetModelState)
 
         self.bridge = CvBridge()
 
@@ -186,8 +130,8 @@ class TrainingNode:
         self.rigth_lap = False
 
 
-        self.actions = ACTIONS
-        self.n_actions = N_ACTIONS
+        self.actions = actions
+        self.n_actions = par.N_ACTIONS
 
         self.number_states = 0
         self.current_state = None
@@ -205,7 +149,7 @@ class TrainingNode:
 
     ## CALLBACKS DE TOPICS
     def position_callback(self, msg):
-        robot_index = msg.name.index(MODEL)
+        robot_index = msg.name.index(par.MODEL)
         self.robot_position = msg.pose[robot_index]
         
         if self.first_pos_call:
@@ -232,8 +176,8 @@ class TrainingNode:
     ## EXECUTAR ACCION
     def execute_action(self, action):
     
-        self.linear_vel = self.actions[action][0] * VELOCITY_FACTOR
-        self.angular_vel = self.actions[action][1] * VELOCITY_FACTOR
+        self.linear_vel = self.actions[action][0] * par.VELOCITY_FACTOR
+        self.angular_vel = self.actions[action][1] * par.VELOCITY_FACTOR
 
         twist = Twist()
 
@@ -248,7 +192,7 @@ class TrainingNode:
         # print(len(self.valid_pos))
 
         model_state = ModelState()
-        model_state.model_name = MODEL 
+        model_state.model_name = par.MODEL 
 
         if self.valid_pos: # ultima posicion gardada se a lista non esta vacia
             last_pos = self.valid_pos[-1]
