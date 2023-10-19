@@ -14,6 +14,7 @@ from std_msgs.msg import String, Int16
 
 import parametres as par
 from parametres import msg
+from parametres import TOPIC_REINFORCEMENT
 
 
 # ENMASCARAR IMAXE
@@ -62,9 +63,11 @@ def find_closest_state(image, stored_images, threshold = par.TH_DIST_IMAGE):
         min_dist = float('inf')
         min_idx = -1
         maskImg = mask_images(img=image)
+        h, w = maskImg.shape[:2]
+        n_px = h * w
         for i, img in enumerate(stored_images):
             mimg = mask_images(img=img[0])
-            distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2))
+            distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2)) / n_px
             list_dist.append([distance, i])
             if distance < min_dist:
                 min_dist = distance
