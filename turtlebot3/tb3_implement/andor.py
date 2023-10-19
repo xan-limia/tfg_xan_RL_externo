@@ -5,10 +5,10 @@ W = 8
 H = 6
 
 # Función para cargar las imágenes de la lista
-def cargar_imagenes(directorio):
+def cargar_imagenes(directorio, tipo_imagen):
         stored_images = []
         for filename in os.listdir(directorio):
-            if(filename.endswith('.png')):
+            if filename.endswith('.png') and filename.startswith('or_') and not filename.endswith('robot_real.png'):
                 img = cv2.imread(os.path.join(directorio, filename))
                 #umbral, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
                 stored_images.append(img) # Gardar imaxe sen mascara
@@ -26,7 +26,6 @@ def calcular_and_or(imagenes, flag):
         return resultado_or
     
     elif flag == 1:
-             
         resultado_and = imagenes[0]
 
         for imagen in imagenes:
@@ -35,10 +34,12 @@ def calcular_and_or(imagenes, flag):
         return resultado_and
 
     
-directorio = 'prueba_siguelinea_manual_3_separadas'
-#directorio = 'prueba_manual_1'
+# directorio = 'result_analize_images'
+# directorio = 'tb3_implement/manual_teleop_y2'
+directorio = 'andor'
+# directorio = 'prueba_manual_1'
 
-imagenes = cargar_imagenes(directorio)
+imagenes = cargar_imagenes(directorio, '')
 
 # flag = 0, calcula or, flag = 1, calcula and
 resultado = calcular_and_or(imagenes, flag = 0)
@@ -57,14 +58,14 @@ umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
 cv2.imshow("Black&White", img_binaria)
 
 
-print(resultado)
+# print(resultado)
 
 cv2.imshow("OR", imagen_redimensionada)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
-nome_imaxe_or = 'or.png'
-directorio_resultado = 'prueba_siguelinea_manual_3_separadas'
-
-cv2.imwrite(os.path.join(directorio_resultado, nome_imaxe_or), resultado)
+nome_imaxe_or = 'and_or_y.png'
+# directorio_resultado = 'prueba_siguelinea_manual_3_separadas'
+# directorio_resultado = 'andor'
+# cv2.imwrite(os.path.join(directorio_resultado, nome_imaxe_or), resultado)
 
