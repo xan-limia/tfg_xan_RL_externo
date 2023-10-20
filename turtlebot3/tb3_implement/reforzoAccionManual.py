@@ -47,9 +47,8 @@ class ManualNode(u.TrainingNode):
         for filename in os.listdir(self.folder):
             if(filename.endswith('.png')):
                 img = cv2.imread(os.path.join(self.folder, filename))
-                # maskImg = self.mask_images(img)
-                # self.stored_images.append(maskImg)
-                self.stored_images.append(img) # Gardar imaxe sen mascara
+                
+                self.stored_images.append(self.stored_images.append((img, datetime.datetime.now()))) # Gardar imaxe sen mascara
 
                 img = pyexiv2.Image(os.path.join(self.folder, filename))
                 metadata = img.read_exif()
@@ -88,8 +87,12 @@ class ManualNode(u.TrainingNode):
             img_data = pyexiv2.Image(filepath)
             metadata = img_data.read_exif()
             # Agregar metadato
-            linear = self.actions[self.state_action[i]][0]
-            angular = self.actions[self.state_action[i]][1]
+            if isinstance(self.state_action[i], tuple):
+                linear = self.state_action[i][0]
+                angular = self.state_action[i][1]
+            elif isinstance(self.state_action[i], int):
+                linear = self.actions[self.state_action[i]][0]
+                angular = self.actions[self.state_action[i]][1]
             metadata['Exif.Photo.UserComment'] = f"linear={linear}\nangular={angular}"
             img_data.modify_exif(metadata)
 

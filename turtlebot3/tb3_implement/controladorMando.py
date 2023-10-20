@@ -16,8 +16,8 @@ from std_msgs.msg import String, Float32, Int16
 MODEL = 'turtlebot3_burger'
 TOPIC_VEL = '/cmd_vel'
 TOPIC_CAMERA = '/camera/image'
-TOPIC_MODEL_STATE = '/gazebo/model_states'
-TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
+# TOPIC_MODEL_STATE = '/gazebo/model_states'
+# TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
 TOPIC_REINFORCEMENT = '/reinforcement'
 TOPIC_IMG_MASK = '/img_mask'
 TOPIC_JOY = '/joy'
@@ -87,7 +87,7 @@ class JoyNode:
 
 
     def controller(self):
-        self.bag = rosbag.Bag('manual_teleop_y2.bag', 'w')
+        self.bag = rosbag.Bag('manual_teleop_robot_real_1.bag', 'w')
         angular = -1
         while True:
             if self.inn == 1:
