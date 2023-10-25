@@ -87,7 +87,7 @@ class JoyNode:
 
 
     def controller(self):
-        self.bag = rosbag.Bag('manual_teleop_robot_real_1.bag', 'w')
+        self.bag = rosbag.Bag('pp.bag', 'w')
         angular = -1
         while True:
             if self.inn == 1:

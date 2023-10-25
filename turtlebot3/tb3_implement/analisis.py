@@ -15,7 +15,7 @@ def vel_hist(bag):
 
     bag.close()
 
-    plot.hist(velocities, bins=10)
+    plot.hist(velocities, bins=11)
     plot.xlabel('Velocity Value')
     plot.ylabel('Frequency')
     plot.title('Angular velocities')
@@ -51,8 +51,9 @@ def average_px(bag_name):
 
     average = (image_sum / len(images)).astype(np.uint8)
 
+    cv2.imwrite(os.path.join('result_analize_images', 'average_px_robot_real_1.png'), average)
+
     # resize = cv2.resize(average, (320, 240))
-    cv2.imwrite(os.path.join('result_analize_images', 'average_px_robot_real.png'), average)
     # cv2.imshow('result', resize)
     # cv2.waitKey()
     # cv2.destroyAllWindows()
@@ -65,21 +66,22 @@ def color_filter(bag_name):
             image = cv2.imread(os.path.join(bag_name, filename))
             images.append(image)
 
-    low_y = np.array([20, 150, 150], dtype=np.uint8)
-    up_y = np.array([70, 255, 255], dtype=np.uint8)
+    # low_y = np.array([20, 150, 150], dtype=np.uint8)
+    # up_y = np.array([70, 255, 255], dtype=np.uint8)
 
-    # low_y = np.array([200, 200, 200], dtype=np.uint8)
-    # up_y = np.array([255, 255, 255], dtype=np.uint8)
+    low_y = np.array([200, 200, 200], dtype=np.uint8)
+    up_y = np.array([255, 255, 255], dtype=np.uint8)
 
-    heatmap = np.zeros(images[0].shape[:2], dtype=np.uint8)
+    heatmap = np.ones(images[0].shape[:2], dtype=np.uint8) * 255
 
     for image in images:
         y_mask = cv2.inRange(image, low_y, up_y)
         # heatmap += y_mask
-        heatmap = cv2.add(heatmap, y_mask)
+        heatmap = cv2.subtract(heatmap, y_mask)
 
-    heatmap_resize = cv2.resize(heatmap, (320, 240))
-    cv2.imwrite(os.path.join('result_analize_images', 'color_filter_robot_real.png'), heatmap)
+    cv2.imwrite(os.path.join('result_analize_images', 'color_filter_robot_real_1.png'), heatmap)
+
+    # heatmap_resize = cv2.resize(heatmap, (320, 240))
     # cv2.imshow('result', heatmap_resize)
     # # cv2.imshow('original', images[0])
     # cv2.waitKey()
@@ -118,9 +120,6 @@ def mask_images(img, mask = MASK):
 
         return maskImg
 
-# N_PX = 160*120
-N_PX = 80*60
-
 def dist_hist(bag_name):
     images = []
 
@@ -128,37 +127,36 @@ def dist_hist(bag_name):
         if filename.endswith('.png'):
             image = cv2.imread(os.path.join(bag_name, filename))
             images.append(image)
-
-    distances = np.zeros((len(images), len(images)))
-    average_distances = np.zeros(len(images))
-    for i in range(len(images)):
+    n_images = len(images)
+    distances = np.zeros((n_images, n_images))
+    average_distances = np.zeros(n_images)
+    for i in range(n_images):
         maskImg1 = mask_images(img=images[i])
+        h, w = maskImg1.shape[:2]
+        n_px = h * w
         total_distance = 0.0
-        for j in range(len(images)):
+        for j in range(n_images):
             if i != j:
                 maskImg2 = mask_images(img=images[j])
                 distance = np.sum((cv2.absdiff(maskImg1.flatten(), maskImg2.flatten()) ** 2))
-                # distances[i][j] = distance
-                # total_distance += distance
+                distances[i][j] = distance / n_px
+                total_distance += distance / n_px
 
-                distances[i][j] = distance/N_PX
-                total_distance += distance/N_PX
-
-        average_distance = total_distance / (len(images) - 1)
+        average_distance = total_distance / (n_images - 1)
         average_distances[i] = average_distance
 
     plot.figure(1)
     plot.hist(distances, bins=5)
     plot.xlabel('Distance')
     plot.ylabel('Frequency')
-    plot.title('Euclidean distances')
+    plot.title(f'Euclidean distances, Nº Img= {n_images}, MASK = {MASK}')
     plot.grid(True)
 
     plot.figure(2)
     plot.hist(average_distances, bins=5)
     plot.xlabel('Average Distance')
     plot.ylabel('Frequency')
-    plot.title('Euclidean distances')
+    plot.title(f'Euclidean distances, Nº Img = {n_images},  MASK = {MASK}')
     plot.grid(True)
 
     plot.show()

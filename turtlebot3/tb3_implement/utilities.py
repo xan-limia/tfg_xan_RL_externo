@@ -84,11 +84,8 @@ def find_closest_state(image, stored_images, threshold = par.TH_DIST_IMAGE):
 # DETECTAR REFORZO NA IMAXE    
 def check_ref_in_images(image, threshold = par.TH_R_IMAGE, color = par.COLOR, w = par.W, h = par.H, x = par.X, y = par.Y):
         img_gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        umbral, img_binaria = cv2.threshold(img_gris, 127, 255, cv2.THRESH_BINARY)
+        umbral, img_binaria = cv2.threshold(img_gris, par.TH_BIN_MIN, par.TH_BIN_MAX, cv2.THRESH_BINARY)
         region = img_binaria[y:y+h, x:x+w]
-
-        # black_region = numpy.zeros((h, w), dtype=numpy.uint8)
-        # coincidences = cv2.compare(region, black_region, cv2.CMP_EQ)
 
         ref_region = numpy.ones((h, w), dtype=numpy.uint8) * color
         coincidences = cv2.compare(region, ref_region, cv2.CMP_EQ)
@@ -124,7 +121,7 @@ class TrainingNode:
         self.robot_position = None
         self.first_pos_call = True
 
-        self.stop_manual = False
+        self.stop_manual = 0
 
         self.stored_images = []
         self.valid_pos = deque(maxlen=10)
@@ -179,9 +176,13 @@ class TrainingNode:
 
     ## EXECUTAR ACCION
     def execute_action(self, action):
-    
-        self.linear_vel = self.actions[action][0] * par.VELOCITY_FACTOR
-        self.angular_vel = self.actions[action][1] * par.VELOCITY_FACTOR
+
+        if isinstance(action, tuple):
+            self.linear_vel = action[0] * par.VELOCITY_FACTOR
+            self.angular_vel = action[1] * par.VELOCITY_FACTOR
+        else:
+            self.linear_vel = self.actions[action][0] * par.VELOCITY_FACTOR
+            self.angular_vel = self.actions[action][1] * par.VELOCITY_FACTOR
 
         twist = Twist()
 

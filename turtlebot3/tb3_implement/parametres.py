@@ -1,3 +1,5 @@
+IS_REAL_ROBOT = False
+
 VELOCITY_FACTOR = 1
 
 # PIXELES
@@ -5,7 +7,7 @@ N_PX = 60*80
 
 # THRESHOLDS
 # TH_DIST_IMAGE = 160000
-TH_DIST_IMAGE = 80
+TH_DIST_IMAGE = 275
 
 # # AREA REFORZO (Sigue carril)
 # W = 8
@@ -17,22 +19,37 @@ TH_DIST_IMAGE = 80
 # TH_R_IMAGE = 0.8
 
 # MASCARA
-MASK = (3,0,5,5)
+MASK = (0,0,5,5)
 
 # AREA REFORZO (Sigue lineas) MASK = (3,0,5,5)
-W = 48
-H = 12
-X = 16
-Y = 47
+# W = 48
+# H = 12
+# X = 16
+# Y = 47
 
-COLOR = 255 # Color co que se mide o reforzo
+# AREA REFORZO (Sigue lineas) MASK = (0,0,5,5)
+W = 96
+H = 119
+X = 32
+Y = 0
+
+TH_BIN_MIN = 50
+TH_BIN_MAX = 255
+
+COLOR = 0 # Color co que se mide o reforzo
 TH_R_IMAGE = 0.05
 
-# ACIONS
-N_ACTIONS = 5
-ACTIONS = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
-# ACTIONS = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
+BAD_REWARD = -1
+GOOD_REWARD = 0.01 
 
+# ACIONS
+
+LINEAR_VEL = 0.15
+
+N_ACTIONS = 5
+# ACTIONS = [(0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90)]
+# ACTIONS = [(0.15, 1.20), (0.15, 0.90), (0.15, 0.54), (0.15, 0.0), (0.15, -0.54), (0.15, -0.90), (0.15, -1.20)]
+ACTIONS = [(LINEAR_VEL, 1.0), (LINEAR_VEL, 0.50), (LINEAR_VEL, 0.0), (LINEAR_VEL, -0.50), (LINEAR_VEL, -1.0)]
 
 msg = """
 Posibles Accions 
@@ -43,8 +60,18 @@ Posibles Accions
 4 Xiro Dereita Suave
 5 Xiro Dereita Brusco
 
-enter reinterar calcular
+enter reintentar calcular
 """
+
+# msg = """
+# Posibles Accions 
+# ---------------------------
+# 1 Xiro Esquerda
+# 2 Avanzar Recto
+# 3 Xiro Dereita
+
+# enter reintentar calcular
+# """
 
 # PARAMETROS ROBOT
 MODEL = 'turtlebot3_burger'
