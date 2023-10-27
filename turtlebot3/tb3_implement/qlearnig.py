@@ -23,33 +23,13 @@ class QLNode(TrainingNode):
         self.q_values = []
 
     def check_default_action(self, angular_vel):
-        # if angular_vel == 1.20:
-        #     action = 0
-        # elif angular_vel == 0.90:
-        #     action = 1
-        # elif angular_vel == 0.54:
-        #     action = 2
-        # elif angular_vel == 0.0:
-        #     action = 3
-        # elif angular_vel == -0.54:
-        #     action = 4
-        # elif angular_vel == -0.90:
-        #     action = 5
-        # elif angular_vel == -1.20:
-        #     action = 6
-        # return action
+        action = None
+        for i in range(self.n_actions):
+            if angular_vel == self.actions[i][1]:
+                action = i
+                return action
 
-        if angular_vel == 1.0:
-            action = 0
-        elif angular_vel == 0.50:
-            action = 1
-        elif angular_vel == 0.0:
-            action = 2
-        elif angular_vel == -0.50:
-            action = 3
-        elif angular_vel == -1.0:
-            action = 4
-        return action
+        
     
     
     def load_images(self):
@@ -67,17 +47,19 @@ class QLNode(TrainingNode):
                 # Transformar string nun vector q values
                 text = metadata['Exif.Photo.UserComment']  
                 if text.startswith("q_values"):
-                    q_values = eval(text.split("=")[1])
-                    self.q_values.append(q_values)
+                    init_q_values = eval(text.split("=")[1])      
                 elif text.startswith("linear"):
                     angular_vel = float(text.split("=")[2])
                     action = self.check_default_action(angular_vel=angular_vel)
-                    init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1
-                    init_q_values[action] = Q_VALUE_DEFAULT
-                    self.q_values.append(init_q_values) # q values novo estado
+                    if action is not None:
+                        init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1
+                        init_q_values[action] = Q_VALUE_DEFAULT     
+                    else:
+                        init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1           
                 else:
                     init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1
-                    self.q_values.append(init_q_values) # q values novo estado
+
+                self.q_values.append(init_q_values)
         self.number_states = len(self.stored_images)
 
     ## ACCIONS
