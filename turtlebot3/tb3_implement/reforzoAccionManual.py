@@ -102,7 +102,7 @@ class ManualNode(TrainingNode):
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
 
-            if self.isfinish == 3: # entrenamento terminado
+            if self.isfinish == FINISH_COUNT: # entrenamento terminado
                 break
             
             if self.image is not None:

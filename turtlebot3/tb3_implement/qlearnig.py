@@ -29,9 +29,6 @@ class QLNode(TrainingNode):
                 action = i
                 return action
 
-        
-    
-    
     def load_images(self):
         if not os.path.exists(self.folder):
             os.makedirs(self.folder) # crear directorio se non existe
@@ -58,7 +55,6 @@ class QLNode(TrainingNode):
                         init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1           
                 else:
                     init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1
-
                 self.q_values.append(init_q_values)
         self.number_states = len(self.stored_images)
 
@@ -130,7 +126,7 @@ class QLNode(TrainingNode):
         
         while not rospy.is_shutdown():
             
-            if self.isfinish == 3: # entrenamento terminado
+            if self.isfinish == FINISH_COUNT: # entrenamento terminado
                 break
 
             current_time = rospy.Time.now()
