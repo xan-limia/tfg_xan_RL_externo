@@ -1,19 +1,5 @@
-import rospy
-import rosbag
-import cv2, numpy, pyexiv2
-import os, sys, signal
-import datetime
-import random
-from collections import deque
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-from geometry_msgs.msg import Twist, Pose, Quaternion
-from gazebo_msgs.msg import ModelState, ModelStates
-from gazebo_msgs.srv import SetModelState
-from std_msgs.msg import String, Int16
-
-import utilities as u
-
+# import utilities as u
+from utilities import *
 
 # PIXELES
 
@@ -29,28 +15,40 @@ EPSILON = 0.00
 LEARNING_RATE = 0.1 
 DISCOUNT_FACTOR = 0.9
 
-class QLNode(u.TrainingNode):
+class QLNode(TrainingNode):
     def __init__(self, foldername):
         rospy.init_node('qlearning')
-        u.TrainingNode.__init__(self, foldername=foldername)
+        TrainingNode.__init__(self, foldername=foldername)
         
         self.q_values = []
 
     def check_default_action(self, angular_vel):
-        if angular_vel == 1.20:
+        # if angular_vel == 1.20:
+        #     action = 0
+        # elif angular_vel == 0.90:
+        #     action = 1
+        # elif angular_vel == 0.54:
+        #     action = 2
+        # elif angular_vel == 0.0:
+        #     action = 3
+        # elif angular_vel == -0.54:
+        #     action = 4
+        # elif angular_vel == -0.90:
+        #     action = 5
+        # elif angular_vel == -1.20:
+        #     action = 6
+        # return action
+
+        if angular_vel == 1.0:
             action = 0
-        elif angular_vel == 0.90:
+        elif angular_vel == 0.50:
             action = 1
-        elif angular_vel == 0.54:
-            action = 2
         elif angular_vel == 0.0:
+            action = 2
+        elif angular_vel == -0.50:
             action = 3
-        elif angular_vel == -0.54:
+        elif angular_vel == -1.0:
             action = 4
-        elif angular_vel == -0.90:
-            action = 5
-        elif angular_vel == -1.20:
-            action = 6
         return action
     
     
@@ -153,18 +151,16 @@ class QLNode(u.TrainingNode):
             if self.isfinish == 3: # entrenamento terminado
                 break
 
-
             current_time = rospy.Time.now()
             if self.image is not None and self.stop_manual == 0:
                 
-                self.current_state = u.find_closest_state(image=self.image, stored_images=self.stored_images) # encontrar estado actual
+                self.current_state = find_closest_state(image=self.image, stored_images=self.stored_images) # encontrar estado actual
                 print("estado actual: ", self.current_state)
-
-                # first_frame = self.image
             
                 if self.current_state is not None:
                     message = String()
-                    message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
+                    if IS_SIM_ROBOT:
+                        message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
                     topic = f"/state_{str(self.current_state).zfill(2)}"
                     self.bag.write(topic, message, current_time)
                     
@@ -184,42 +180,39 @@ class QLNode(u.TrainingNode):
                     while self.image is None:
                         pass
 
-                    reward = u.check_ref_in_images(image=self.image) # obter recompensa
+                    reward = check_ref_in_images(image=self.image) # obter recompensa
 
-                    # last_frame = self.image
-
-                    # distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
-
-                    new_state = u.find_closest_state(self.image, self.stored_images) # obter o estado despois de executar a accion
+                    new_state = find_closest_state(self.image, self.stored_images) # obter o estado despois de executar a accion
                     
                     if new_state is None: # estado novo (crear)
-                        print(new_state)
-                        # self.stop_robot() # eliminar no real
+                        # print(new_state)
                         self.append_states()
-                        new_state = u.find_closest_state(self.image, self.stored_images)
+                        new_state = find_closest_state(self.image, self.stored_images)
 
                     print("estado siguiente: ", new_state)
                     
 
-                    if new_state != self.current_state or reward == -1:
+                    if new_state != self.current_state or reward == NEGATIVE_REWARD:
                         self.update_q_values(reward, new_state) # actualizar q_values
 
-                    if reward == -1: # recompensa negativa
+                    if reward == NEGATIVE_REWARD: # recompensa negativa
                         self.isfinish = 0
                         
                         message = String()
                         now = datetime.datetime.now()
                         message.data = f"{now.strftime('%m-%d_%H-%M-%S')}: negative reinforcement detected in state {self.current_state} when applying action {action}"
                         self.reinforcement_publisher.publish(message)
-                        self.bag.write(u.TOPIC_REINFORCEMENT, message, current_time)
+                        self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
                         
-                        self.reset_position() # reiniciar a ultima posicion gardada
+                        if IS_SIM_ROBOT:
+                            self.reset_position() # reiniciar a ultima posicion gardada
                         
-                    else:
+                    elif IS_SIM_ROBOT:
                         self.append_pos() # engadir nova posicion a cola
 
                     
-                    self.check_finish_pos() # comprobar se terminamos o entrenamento
+                    if IS_SIM_ROBOT:
+                        self.check_finish_pos() # comprobar se terminamos o entrenamento
 
                     self.image = None # reiniciar a imaxe capturada para obligar a ter unha nova
 

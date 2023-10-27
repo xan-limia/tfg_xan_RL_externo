@@ -1,4 +1,4 @@
-IS_REAL_ROBOT = False
+IS_SIM_ROBOT = True
 
 VELOCITY_FACTOR = 1
 
@@ -7,7 +7,7 @@ N_PX = 60*80
 
 # THRESHOLDS
 # TH_DIST_IMAGE = 160000
-TH_DIST_IMAGE = 275
+TH_DIST_IMAGE = 90
 
 # # AREA REFORZO (Sigue carril)
 # W = 8
@@ -19,28 +19,33 @@ TH_DIST_IMAGE = 275
 # TH_R_IMAGE = 0.8
 
 # MASCARA
-MASK = (0,0,5,5)
+MASK = (3,0,5,5)
 
 # AREA REFORZO (Sigue lineas) MASK = (3,0,5,5)
+W = 48
+H = 12
+X = 16
+Y = 47
+
 # W = 48
-# H = 12
+# H = 59
 # X = 16
-# Y = 47
+# Y = 0
 
 # AREA REFORZO (Sigue lineas) MASK = (0,0,5,5)
-W = 96
-H = 119
-X = 32
-Y = 0
+# W = 96
+# H = 119
+# X = 32
+# Y = 0
 
-TH_BIN_MIN = 50
+TH_BIN_MIN = 127
 TH_BIN_MAX = 255
 
-COLOR = 0 # Color co que se mide o reforzo
+COLOR = 255 # Color co que se mide o reforzo
 TH_R_IMAGE = 0.05
 
-BAD_REWARD = -1
-GOOD_REWARD = 0.01 
+POSITIVE_REWARD = 0.01 
+NEGATIVE_REWARD = -1
 
 # ACIONS
 
@@ -73,7 +78,7 @@ enter reintentar calcular
 # enter reintentar calcular
 # """
 
-# PARAMETROS ROBOT
+# TOPICS
 MODEL = 'turtlebot3_burger'
 TOPIC_VEL = '/cmd_vel'
 TOPIC_CAMERA = '/camera/image'

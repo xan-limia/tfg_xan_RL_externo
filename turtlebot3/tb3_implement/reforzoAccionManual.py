@@ -1,18 +1,6 @@
-import rospy
-import rosbag
-import cv2, numpy, pyexiv2
-import os, sys, signal
-import datetime
-import random
-from collections import deque
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-from geometry_msgs.msg import Twist, Pose, Quaternion
-from gazebo_msgs.msg import ModelState, ModelStates
-from gazebo_msgs.srv import SetModelState
-from std_msgs.msg import String
 
-import utilities as u
+# import utilities as u
+from utilities import *
 
 # Ctrl+C to quit
 
@@ -30,13 +18,11 @@ import utilities as u
 # enter reinterar calcular
 # """
 
-
-
-class ManualNode(u.TrainingNode):
+class ManualNode(TrainingNode):
     def __init__(self, foldername):
 
         rospy.init_node('randomLearning')
-        u.TrainingNode.__init__(self, foldername=foldername)
+        TrainingNode.__init__(self, foldername=foldername)
 
         self.state_action = []
     
@@ -48,7 +34,7 @@ class ManualNode(u.TrainingNode):
             if(filename.endswith('.png')):
                 img = cv2.imread(os.path.join(self.folder, filename))
                 
-                self.stored_images.append(self.stored_images.append((img, datetime.datetime.now()))) # Gardar imaxe sen mascara
+                self.stored_images.append((img, datetime.datetime.now()))
 
                 img = pyexiv2.Image(os.path.join(self.folder, filename))
                 metadata = img.read_exif()
@@ -120,20 +106,16 @@ class ManualNode(u.TrainingNode):
                 break
             
             if self.image is not None:
-                # if first:
-                #     # first_frame = self.image
-                #     first_frame = self.mask_images(self.image)
-                #     first = False
                 
-                # Comentar esta parte par realizar probas sin reiniciar a posicion do robot
-                result = u.check_ref_in_images(image=self.image)
-                if result == -1 :
+                # Comentar esta parte para realizar probas sin detectar reforzo
+                result = check_ref_in_images(image=self.image)
+                if result == NEGATIVE_REWARD :
                     self.isfinish = 0
                     
                     message = String()
                     message.data = f"negative reinforcement detected in state {self.current_state}"
                     self.reinforcement_publisher.publish(message)
-                    self.bag.write(u.TOPIC_REINFORCEMENT, message, current_time)
+                    self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
                     print(message.data)
                     # self.sav_image("reinf")
                     
@@ -141,20 +123,15 @@ class ManualNode(u.TrainingNode):
                         del self.stored_images[self.current_state]
                         del self.state_action[self.current_state]
 
-                    # last_frame = self.image
-                    # last_frame = self.mask_images(self.image)
+                    if IS_SIM_ROBOT:
+                        self.reset_position()
+                    else:
+                        self.stop_robot()
 
-                    # distance = numpy.sum((cv2.absdiff(first_frame.flatten(), last_frame.flatten()) ** 2))
-
-                    # first = True
-                    # with open("distancia_reforzo_siguelinea.txt", "a") as archivo:
-                    #     archivo.write(str(distance) + "\n")
-
-                    self.reset_position()
                     self.image = None
 
 
-                else:
+                elif IS_SIM_ROBOT:
                     self.append_pos() # engadir nova posicion a cola
 
                 
@@ -162,23 +139,25 @@ class ManualNode(u.TrainingNode):
                     pass
                 #######################################################################
                
-                self.current_state = u.find_closest_state(self.image, self.stored_images)
+                self.current_state = find_closest_state(self.image, self.stored_images)
             
                 if self.current_state is not None:
                     message = String()
-                    message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
+                    if IS_SIM_ROBOT:
+                        message.data = f"{self.current_state}, x: {self.robot_position.position.x}, y: {self.robot_position.position.y}, z: {self.robot_position.position.z}"
                     topic = f"/state_{str(self.current_state).zfill(2)}"
                     self.bag.write(topic, message, current_time)
 
                     self.execute_action(self.state_action[self.current_state])
 
-                    self.check_finish_pos()
+                    if IS_SIM_ROBOT:
+                        self.check_finish_pos()
 
                     self.image = None
                 else:
                     self.stop_robot()
 
-                    key = input(u.msg)
+                    key = input(msg)
                     if key == "":
                         pass
                     elif int(key) < 1 or int(key) > self.n_actions:
