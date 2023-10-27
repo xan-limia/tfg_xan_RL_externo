@@ -160,29 +160,32 @@ class ManualNode(TrainingNode):
                     key = input(msg)
                     if key == "":
                         pass
-                    elif int(key) < 1 or int(key) > self.n_actions:
-                        print("Tecla no valida\n")
                     else:
+                        try:
+                            if int(key) < 1 or int(key) > self.n_actions:
+                                print("Tecla no valida\n")
+                            else:
+                                self.isfinish = 0
+                                if self.robot_position is not None:
+                                    self.finish_position = self.robot_position
+                                    
+                                action = int(key) - 1
+                                self.execute_action(action=action)
+                                
+                                message = String()
+                                message.data = f"action: {action}"
+                                topic = f"/action_{action}"
+                                self.bag.write(topic, message, current_time)
 
-                        self.isfinish = 0
-                        if self.robot_position is not None:
-                            self.finish_position = self.robot_position
-                            
-                        action = int(key) - 1
-                        self.execute_action(action=action)
-                        
-                        message = String()
-                        message.data = f"action: {action}"
-                        topic = f"/action_{action}"
-                        self.bag.write(topic, message, current_time)
+                                topic = "/images"
+                                self.bag.write(topic, self.img_msg, current_time)
+                                
+                                self.append_states(action)
 
-                        topic = "/images"
-                        self.bag.write(topic, self.img_msg, current_time)
-                        
-                        self.append_states(action)
-
-                        self.image = None
-                        self.write = False
+                                self.image = None
+                                self.write = False
+                        except:
+                            print("Tecla no valida\n")
 
                     
 
