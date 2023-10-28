@@ -101,7 +101,9 @@ class TrainingNode:
 
         self.velocity_publisher = rospy.Publisher(TOPIC_VEL, Twist, queue_size=10)
         self.maskImg_publisher = rospy.Publisher(TOPIC_IMG_MASK, Image, queue_size=10)
+        self.refImg_publisher = rospy.Publisher(TOPIC_IMG_REF, Image, queue_size=10)
         self.reinforcement_publisher = rospy.Publisher(TOPIC_REINFORCEMENT, String, queue_size=10)
+        self.finish_publisher = rospy.Publisher(TOPIC_FINISH_TRAIN, String, queue_size=10)
         
         self.image_subscriber = rospy.Subscriber(TOPIC_CAMERA, Image, self.image_callback)        
         self.manual_stop_subscriber = rospy.Subscriber(TOPIC_STOP_ROBOT, Int16, self.manual_stop_callback)
@@ -171,7 +173,18 @@ class TrainingNode:
         maskImgMsg = self.bridge.cv2_to_imgmsg(maskImg, "bgr8")
         self.maskImg_publisher.publish(maskImgMsg)
 
-    ## EXECUTAR ACCION
+        img_gris = cv2.cvtColor(image_bridge, cv2.COLOR_BGR2GRAY)
+        umbral, img_binaria = cv2.threshold(img_gris, TH_BIN_MIN, TH_BIN_MAX, cv2.THRESH_BINARY)
+        refImg = img_binaria[Y:Y+H, X:X+W]
+        # refImg = cv2.cvtColor(refImg, cv2.COLOR_GRAY2BGR)
+        # cv2.rectangle(refImg, (X, Y), (X + W, Y + H), (0, 0, 255), 1)
+        # refImgMsg = self.bridge.cv2_to_imgmsg(refImg, "bgr8")
+        refImgMsg = self.bridge.cv2_to_imgmsg(refImg, "passthrough")
+        self.refImg_publisher.publish(refImgMsg)
+
+
+
+    ## EXECUTAR ACCIONddddddddd
     def execute_action(self, action):
 
         if isinstance(action, tuple):
@@ -238,3 +251,14 @@ class TrainingNode:
         elif self.rigth_lap:
             self.isfinish = self.isfinish+1
             self.rigth_lap = False
+
+    ## FINALIZAR ENTRENAMENTO
+    def finish_train(self):
+        text = "¡Entrenamento terminado!"
+        print(text)
+        
+        current_time = rospy.Time.now()
+        message = String()
+        message.data = text
+        self.finish_publisher.publish(message)
+        self.bag.write(TOPIC_REINFORCEMENT, message, current_time)

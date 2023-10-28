@@ -1,14 +1,9 @@
-# import utilities as u
 from utilities import *
 
-# PIXELES
-
-N_PX = 60*80
-
-
+# PARAMETROS QLEARNING
 Q_VALUE_DEFAULT = 0.01
 
-# POLITICAE-GREEDY
+# POLITICA E-GREEDY
 EPSILON = 0.00
 
 # PARAMETROS Q-LEARNING
@@ -82,6 +77,10 @@ class QLNode(TrainingNode):
             self.stored_images.append((self.image, now)) # novo estado
             init_q_values = [random.uniform(0, 0.01) for _ in range(self.n_actions)] # inicializar de forma aleatoria 0 e 0.1
             self.q_values.append(init_q_values) # q values novo estado
+
+            filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S-%f')}.png"
+            filepath = os.path.join(os.getcwd(), filename)
+            cv2.imwrite(filepath, self.image)
         self.number_states = len(self.stored_images)
 
     ## ACTUALIZAR Q VALUES
@@ -110,7 +109,6 @@ class QLNode(TrainingNode):
         for i, img in enumerate(self.stored_images):
             filename = f"{self.folder}/image_{img[1].strftime('%Y-%m-%d_%H-%M-%S-%f')}.png"
             filepath = os.path.join(os.getcwd(), filename)
-            self.lastSavedFilename = filepath
             cv2.imwrite(filepath, img[0])
             # Leer imagen
             img_data = pyexiv2.Image(filepath)
@@ -206,8 +204,9 @@ class QLNode(TrainingNode):
             else:
                 self.image = None
 
-                    
+        self.finish_train()
 
+                    
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Debe ingresar el nombre de la carpeta a utilizar")

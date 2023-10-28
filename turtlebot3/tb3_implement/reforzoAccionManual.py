@@ -1,22 +1,4 @@
-
-# import utilities as u
 from utilities import *
-
-# Ctrl+C to quit
-
-# msg = """
-# Posibles Accions 
-# ---------------------------
-# 1 Xiro Esquerda Mais Brusco
-# 2 Xiro Esquerda Brusco
-# 3 Xiro Esquerda Suave
-# 4 Avanzar Recto
-# 5 Xiro Dereita Suave
-# 6 Xiro Dereita Brusco
-# 7 Xiro Dereita Mais Brusco
-
-# enter reinterar calcular
-# """
 
 class ManualNode(TrainingNode):
     def __init__(self, foldername):
@@ -45,14 +27,16 @@ class ManualNode(TrainingNode):
         
         self.number_states = len(self.stored_images)
     
-
     def append_states(self, action):
         now = datetime.datetime.now()
         if self.image is not None:
             self.stored_images.append((self.image, now))
             self.state_action.append(action)
             self.current_state = len(self.stored_images) - 1
-            # print("salvados", len(self.stored_images))
+
+            filename = f"{self.folder}/image_{now.strftime('%Y-%m-%d_%H-%M-%S-%f')}.png"
+            filepath = os.path.join(os.getcwd(), filename)
+            cv2.imwrite(filepath, self.image)
         self.number_states = len(self.stored_images)
 
     def write_images(self):
@@ -67,7 +51,6 @@ class ManualNode(TrainingNode):
         for i, img in enumerate(self.stored_images):
             filename = f"{self.folder}/image_{img[1].strftime('%Y-%m-%d_%H-%M-%S-%f')}.png"
             filepath = os.path.join(os.getcwd(), filename)
-            self.lastSavedFilename = filepath
             cv2.imwrite(filepath, img[0])
             # Leer imagen
             img_data = pyexiv2.Image(filepath)
@@ -130,16 +113,15 @@ class ManualNode(TrainingNode):
 
                     self.image = None
 
-
                 elif IS_SIM_ROBOT:
                     self.append_pos() # engadir nova posicion a cola
-
                 
                 while self.image is None:
                     pass
                 #######################################################################
                
                 self.current_state = find_closest_state(self.image, self.stored_images)
+                print("estado actual: ", self.current_state)
             
                 if self.current_state is not None:
                     message = String()
@@ -149,6 +131,7 @@ class ManualNode(TrainingNode):
                     self.bag.write(topic, message, current_time)
 
                     self.execute_action(self.state_action[self.current_state])
+                    print("accion: ", self.state_action[self.current_state])
 
                     if IS_SIM_ROBOT:
                         self.check_finish_pos()
@@ -171,9 +154,10 @@ class ManualNode(TrainingNode):
                                     
                                 action = int(key) - 1
                                 self.execute_action(action=action)
+                                print("accion: ", action)
                                 
                                 message = String()
-                                message.data = f"action: {action}"
+                                message.data = f"action: {action},  state: {self.current_state}"
                                 topic = f"/action_{action}"
                                 self.bag.write(topic, message, current_time)
 
@@ -187,9 +171,8 @@ class ManualNode(TrainingNode):
                         except:
                             print("Tecla no valida\n")
 
-                    
-
-                    
+        self.finish_train()
+        
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

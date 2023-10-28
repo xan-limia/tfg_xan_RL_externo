@@ -26,7 +26,7 @@ MASK = (3,0,5,5)
 W = 48
 H = 12
 X = 16
-Y = 47
+Y = 48
 
 # W = 48
 # H = 59
@@ -87,5 +87,7 @@ TOPIC_MODEL_STATE = '/gazebo/model_states'
 TOPIC_SET_MODEL_STATE = '/gazebo/set_model_state'
 TOPIC_REINFORCEMENT = '/reinforcement'
 TOPIC_IMG_MASK = '/img_mask'
+TOPIC_IMG_REF = '/img_ref'
 TOPIC_STOP_ROBOT = '/stop_robot'
 TOPIC_START_ROBOT = '/start_robot'
+TOPIC_FINISH_TRAIN = '/finish_train'
