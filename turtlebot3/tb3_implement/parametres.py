@@ -1,14 +1,14 @@
-IS_SIM_ROBOT = True
+IS_SIM_ROBOT = False
 FINISH_COUNT = 3
 
-VELOCITY_FACTOR = 1
+VELOCITY_FACTOR = 0.5
 
 # PIXELES
 N_PX = 60*80
 
 # THRESHOLDS
 # TH_DIST_IMAGE = 160000
-TH_DIST_IMAGE = 90
+TH_DIST_IMAGE = 250
 
 # # AREA REFORZO (Sigue carril)
 # W = 8
@@ -20,13 +20,13 @@ TH_DIST_IMAGE = 90
 # TH_R_IMAGE = 0.8
 
 # MASCARA
-MASK = (3,0,5,5)
+MASK = (0,0,5,5)
 
 # AREA REFORZO (Sigue lineas) MASK = (3,0,5,5)
-W = 48
-H = 12
-X = 16
-Y = 48
+# W = 48
+# H = 12
+# X = 16
+# Y = 48
 
 # W = 48
 # H = 59
@@ -34,15 +34,15 @@ Y = 48
 # Y = 0
 
 # AREA REFORZO (Sigue lineas) MASK = (0,0,5,5)
-# W = 96
-# H = 119
-# X = 32
-# Y = 0
+W = 96
+H = 120
+X = 32
+Y = 0
 
-TH_BIN_MIN = 127
+TH_BIN_MIN = 110
 TH_BIN_MAX = 255
 
-COLOR = 255 # Color co que se mide o reforzo
+COLOR = 0 # Color co que se mide o reforzo
 TH_R_IMAGE = 0.05
 
 POSITIVE_REWARD = 0.01 

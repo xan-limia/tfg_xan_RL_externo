@@ -102,9 +102,10 @@ class ManualNode(TrainingNode):
                     print(message.data)
                     # self.sav_image("reinf")
                     
-                    if self.current_state is not None: 
-                        del self.stored_images[self.current_state]
-                        del self.state_action[self.current_state]
+                    if self.last_action is not None: 
+                        del self.stored_images[self.last_action]
+                        del self.state_action[self.last_action]
+                        self.last_action = None
 
                     if IS_SIM_ROBOT:
                         self.reset_position()
@@ -132,6 +133,10 @@ class ManualNode(TrainingNode):
 
                     self.execute_action(self.state_action[self.current_state])
                     print("accion: ", self.state_action[self.current_state])
+
+                    self.last_action = self.current_state
+
+
 
                     if IS_SIM_ROBOT:
                         self.check_finish_pos()
@@ -165,6 +170,7 @@ class ManualNode(TrainingNode):
                                 self.bag.write(topic, self.img_msg, current_time)
                                 
                                 self.append_states(action)
+                                self.last_action = len(self.stored_images) - 1
 
                                 self.image = None
                                 self.write = False
