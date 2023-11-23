@@ -182,6 +182,9 @@ class QLNode(TrainingNode):
                         
                         if IS_SIM_ROBOT:
                             self.reset_position() # reiniciar a ultima posicion gardada
+                        else:
+                            self.stop_robot()
+                            self.stop_manual = 1
                         
                     elif IS_SIM_ROBOT:
                         self.append_pos() # engadir nova posicion a cola
