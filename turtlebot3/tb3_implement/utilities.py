@@ -261,4 +261,4 @@ class TrainingNode:
         message = String()
         message.data = text
         self.finish_publisher.publish(message)
-        self.bag.write(TOPIC_REINFORCEMENT, message, current_time)
+        self.bag.write(TOPIC_FINISH_TRAIN, message, current_time)
