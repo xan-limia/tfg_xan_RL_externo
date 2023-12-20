@@ -1,9 +1,10 @@
-import rosbag
+# import rosbag
 import numpy as np
 import sys, os
 import matplotlib.pyplot as plot
-from cv_bridge import CvBridge
+# from cv_bridge import CvBridge
 import cv2
+import rospy
 
 def vel_hist(bag):
     velocities = []
@@ -161,12 +162,76 @@ def dist_hist(bag_name):
 
     plot.show()
 
-if __name__ == '__main__':
-    if len(sys.argv) >= 1:
-        bagfile = sys.argv[1]
+def make_mask_ref(img, mask, ref_area, imgresult):
+    image = cv2.imread(img)
+    h, w = image.shape[:2]
+        
+    if mask[0] == 0:
+        up = 0
+    else:
+        up = int(h/mask[0])
 
-    bag = rosbag.Bag(bagfile, 'r')
-    bag_name = bagfile.split('.bag')[0]
+    if mask[1] == 0:
+        down = 0
+    else:
+        down = int(h/mask[1])
+
+    if mask[2] == 0:
+        left = 0
+    else:
+        left = int(w/mask[2])
+
+    if mask[3] == 0:
+        right = 0
+    else:
+        right = int(w/mask[3])
+    
+    maskImg = np.zeros_like(image)
+    maskImg[up:h - down, left:w - right] = image[up:h - down, left:w - right]
+
+   
+    cv2.rectangle(maskImg, (ref_area[2], ref_area[3]), (ref_area[2] + ref_area[0], ref_area[3] + ref_area[1]), (0, 0, 255), 1)
+    cv2.imshow("Imagen con rectángulo rojo", maskImg)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    cv2.imwrite(imgresult, maskImg)
+
+def train_times(bag):
+
+    topic_ref = '/reinforcement'
+    topic_finish = '/finish_train'
+
+    topics = bag.get_type_and_topic_info().topics
+
+    train_time = rospy.Time(0)
+    last_time = rospy.Time(0)
+
+    if topic_finish in topics:
+        for _, _, time in bag.read_messages(topics=[topic_ref]):
+            train_time = time
+
+        print(train_time)
+
+    else:
+        for _, _, time in bag.read_messages(topics=[topic_ref]):
+            train_time = last_time
+            last_time = time
+
+        print(train_time)
+
+    
+    bag.close()
+
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        bagfile = sys.argv[1]
+        bag = rosbag.Bag(bagfile, 'r')
+        bag_name = bagfile.split('.bag')[0]
+
+    
 
     # vel_hist(bag=bag)
 
@@ -176,4 +241,6 @@ if __name__ == '__main__':
     
     # color_filter(bag_name=bag_name)
 
-    dist_hist(bag_name)
+    # dist_hist(bag_name)
+
+    # make_mask_ref('result_analize_images/and_or_y5y6.png', (3,0,5,5), (48,40,16,20), 'exemplo_area_ref_w48_h40_x16_y20_sl.png')
