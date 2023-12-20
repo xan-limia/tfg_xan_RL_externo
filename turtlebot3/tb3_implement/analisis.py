@@ -1,8 +1,8 @@
-# import rosbag
+import rosbag
 import numpy as np
 import sys, os
 import matplotlib.pyplot as plot
-# from cv_bridge import CvBridge
+from cv_bridge import CvBridge
 import cv2
 import rospy
 
@@ -202,24 +202,28 @@ def train_times(bag):
     topic_ref = '/reinforcement'
     topic_finish = '/finish_train'
 
-    topics = bag.get_type_and_topic_info().topics
-
+    info = bag.get_type_and_topic_info()
     train_time = rospy.Time(0)
     last_time = rospy.Time(0)
 
-    if topic_finish in topics:
+    if topic_finish in info.topics:
         for _, _, time in bag.read_messages(topics=[topic_ref]):
             train_time = time
-
-        print(train_time)
 
     else:
         for _, _, time in bag.read_messages(topics=[topic_ref]):
             train_time = last_time
             last_time = time
 
-        print(train_time)
+    start = bag.get_start_time()
+    end = bag.get_end_time()
+    total_time = end- start
 
+    final_time = end - train_time.to_sec()
+
+    print("tempo total = ", total_time)     
+    print("tempo entrenamento = ", train_time.to_sec())
+    print("tempo final = ", final_time)
     
     bag.close()
 
@@ -244,3 +248,5 @@ if __name__ == '__main__':
     # dist_hist(bag_name)
 
     # make_mask_ref('result_analize_images/and_or_y5y6.png', (3,0,5,5), (48,40,16,20), 'exemplo_area_ref_w48_h40_x16_y20_sl.png')
+    
+    train_times(bag)
