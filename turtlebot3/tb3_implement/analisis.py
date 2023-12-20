@@ -5,6 +5,7 @@ import matplotlib.pyplot as plot
 from cv_bridge import CvBridge
 import cv2
 import rospy
+import re
 
 def vel_hist(bag):
     velocities = []
@@ -227,6 +228,30 @@ def train_times(bag):
     
     bag.close()
 
+def draw_trajectory(bag):
+    coords_x = []
+    coords_y = []
+
+    state_topics = [topic for topic in bag.get_type_and_topic_info().topics.keys() if topic.startswith('/state_')]
+    coords = []
+
+    for topic in state_topics:
+        for _, msg, time in bag.read_messages(topics=[topic]):
+            search_digits = re.search(r"x:\s*([-+]?\d*\.\d+|\d+),\s*y:\s*([-+]?\d*\.\d+|\d+)", msg.data)
+            if search_digits:
+                x = float(search_digits.group(1))
+                y = float(search_digits.group(2))
+                coords.append((x, y, time))
+
+    sorted_coords = sorted(coords, key=lambda x: x[2])
+
+    coords_x, coords_y, _ = zip(*sorted_coords)
+
+    plot.plot(coords_x, coords_y, marker='o', linestyle='-')
+    plot.xlabel('X')
+    plot.ylabel('Y')
+    plot.grid(True)
+    plot.show()
 
 
 if __name__ == '__main__':
@@ -250,3 +275,5 @@ if __name__ == '__main__':
     # make_mask_ref('result_analize_images/and_or_y5y6.png', (3,0,5,5), (48,40,16,20), 'exemplo_area_ref_w48_h40_x16_y20_sl.png')
     
     train_times(bag)
+    
+    # draw_trajectory(bag)
