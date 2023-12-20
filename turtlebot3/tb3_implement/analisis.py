@@ -221,7 +221,7 @@ def train_times(bag):
 
     final_time = end - train_time.to_sec()
 
-    print("tempo total = ", total_time.to_sec())     
+    print("tempo total = ", total_time)     
     print("tempo entrenamento = ", train_time.to_sec())
     print("tempo final = ", final_time)
     
