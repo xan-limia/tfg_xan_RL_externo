@@ -17,79 +17,68 @@ from std_msgs.msg import String, Int16
 from parametres import *
 
 # ENMASCARAR IMAXE
-
 def mask_images(img, mask = MASK):
-        # Dimensions da imaxe
-        h, w = img.shape[:2]
-        
-        # Dimensions da máscara Ex: mask = (3, 0, 5, 5)
-        if mask[0] == 0:
-            up = 0
+    # Dimensions da imaxe
+    h, w = img.shape[:2]
+    
+    # pxMask = [up, down. left, rigth] Pixeles a eliminar en cada lado
+    pxMask = [0, 0, 0, 0]
+    for i in range (0, 4):
+        if mask[i] == 0:
+            pxMask[i] = 0
+        # dimension vertical
+        elif i < 2:
+            pxMask[i] = int(h/mask[i])
+        # dimension horizontal
         else:
-            up = int(h/mask[0])
+            pxMask[i] = int(w/mask[i])
 
-        if mask[1] == 0:
-            down = 0
-        else:
-            down = int(h/mask[1])
+    # aplicación da máscara
+    maskImg = numpy.zeros((h - pxMask[0] - pxMask[1], w - pxMask[2] - pxMask[3]))
+    maskImg = img[pxMask[0]:h - pxMask[1], pxMask[2]:w - pxMask[3]]
 
-        if mask[2] == 0:
-            left = 0
-        else:
-            left = int(w/mask[2])
-
-        if mask[3] == 0:
-            right = 0
-        else:
-            right = int(w/mask[3])
-       
-        # aplicación da máscara
-        maskImg = numpy.zeros((h - up - down, w - left - right))
-        maskImg = img[up:h - down, left:w - right]
-
-        return maskImg
+    return maskImg
 
 # ENCONTRAR ESTADO MAIS CERCANO
-
 def find_closest_state(image, stored_images, threshold = TH_DIST_IMAGE):
-        print("estados", len(stored_images))
+    print("estados", len(stored_images))
 
-        #comprobacion lista vacia
-        list_dist = []
-        if len(stored_images) == 0:
-            return None 
-        
-        min_dist = float('inf')
-        min_idx = -1
+    #comprobacion lista vacia
+    list_dist = []
+    if len(stored_images) == 0:
+        return None 
+    
+    min_dist = float('inf')
+    min_idx = -1
 
-        # Enmascarase a imaxe actual
-        maskImg = mask_images(img=image)
+    # Enmascarase a imaxe actual
+    maskImg = mask_images(img=image)
 
-        # Calcular numero de px da imaxe
-        h, w = maskImg.shape[:2]
-        n_px = h * w
+    # Calcular numero de px da imaxe
+    h, w = maskImg.shape[:2]
+    n_px = h * w
 
-        # Bucle
-        for i, img in enumerate(stored_images):
-            # Enmascarar img -> img[0] = image, img[1] = date
-            mimg = mask_images(img=img[0])
+    # Bucle
+    for i, img in enumerate(stored_images):
+        # Enmascarar img -> img[0] = image, img[1] = date
+        mimg = mask_images(img=img[0])
 
-            # Distancia
-            distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2)) / n_px
+        # Distancia
+        distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2)) / n_px
 
-            # Devolver distancia minima e indice
-            list_dist.append([distance, i])
-            if distance < min_dist:
-                min_dist = distance
-                min_idx = i
+        # Devolver distancia minima e indice
+        list_dist.append([distance, i])
+        if distance < min_dist:
+            min_dist = distance
+            min_idx = i
 
-        # print(list_dist)
-        list_dist = []
+    # print(list_dist)
+    list_dist = []
 
-        if min_dist > threshold: # estado novo necesrio
-            return None
-        else:
-            return min_idx # detectamos estado actual       
+    if min_dist > threshold: # estado novo necesrio
+        return None
+    else:
+        return min_idx # detectamos estado actual       
 
 # DETECTAR REFORZO NA IMAXE    
 def check_ref_in_images(image, threshold = TH_R_IMAGE, color = COLOR, w = W, h = H, x = X, y = Y):
