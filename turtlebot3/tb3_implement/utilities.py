@@ -19,8 +19,10 @@ from parametres import *
 # ENMASCARAR IMAXE
 
 def mask_images(img, mask = MASK):
+        # Dimensions da imaxe
         h, w = img.shape[:2]
         
+        # Dimensions da máscara Ex: mask = (3, 0, 5, 5)
         if mask[0] == 0:
             up = 0
         else:
@@ -41,11 +43,9 @@ def mask_images(img, mask = MASK):
         else:
             right = int(w/mask[3])
        
+        # aplicación da máscara
         maskImg = numpy.zeros((h - up - down, w - left - right))
         maskImg = img[up:h - down, left:w - right]
-
-        # maskImg = numpy.zeros_like(img)
-        # maskImg[up:h - down, left:w - right] = img[up:h - down, left:w - right]
 
         return maskImg
 
@@ -54,17 +54,30 @@ def mask_images(img, mask = MASK):
 def find_closest_state(image, stored_images, threshold = TH_DIST_IMAGE):
         print("estados", len(stored_images))
 
+        #comprobacion lista vacia
         list_dist = []
         if len(stored_images) == 0:
-            return None
+            return None 
+        
         min_dist = float('inf')
         min_idx = -1
+
+        # Enmascarase a imaxe actual
         maskImg = mask_images(img=image)
+
+        # Calcular numero de px da imaxe
         h, w = maskImg.shape[:2]
         n_px = h * w
+
+        # Bucle
         for i, img in enumerate(stored_images):
+            # Enmascarar img -> img[0] = image, img[1] = date
             mimg = mask_images(img=img[0])
+
+            # Distancia
             distance = numpy.sum((cv2.absdiff(maskImg.flatten(), mimg.flatten()) ** 2)) / n_px
+
+            # Devolver distancia minima e indice
             list_dist.append([distance, i])
             if distance < min_dist:
                 min_dist = distance
@@ -73,7 +86,7 @@ def find_closest_state(image, stored_images, threshold = TH_DIST_IMAGE):
         # print(list_dist)
         list_dist = []
 
-        if min_dist > threshold: # estado novo  # Probar a cambiar a TH_DIST_IMAGE / N_PX 
+        if min_dist > threshold: # estado novo necesrio
             return None
         else:
             return min_idx # detectamos estado actual       
