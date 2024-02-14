@@ -20,7 +20,7 @@ DOCKER_ARGS=${DOCKER_VOLUMES}" "${DOCKER_ENV_VARS}
 
 # Run the command
 
-docker run -it --privileged  --net=host --ipc=host $DOCKER_ARGS xanlimia/turtlebot3_base bash 
+docker run -it --privileged  --net=host --ipc=host $DOCKER_ARGS xanlimia/turtlebot3_simulation bash
 
 
 # perhaps: source devel/setup.bash
