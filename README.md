@@ -8,6 +8,7 @@ Xan Limia García
 
 
 **Guia de usuario**
+    
     A continuación detállase como poñer en funcionamento o noso sistema.
 
     Os requisitos iniciais son ter descargada a imaxe Docker e clonar o repositorio principal.
@@ -55,4 +56,8 @@ Conexión co Turtlebot3 real
     Controlador de mando: _python3 controladorMando.py_
     Prodeceder a executar os algoritmos de aprendizaxe dende o pc remoto
     A imaxe en tempo real da cámara pode visualizarse con _rqt_
+
+Repositorio de probas
+
+    https://github.com/xan-limia/tfg_xan_RL_externo_probas
 
